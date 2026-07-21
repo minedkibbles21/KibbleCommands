@@ -1,0 +1,35 @@
+name: KibbleCommands
+version: '1.1.1'
+main: com.minedkibbles21.kibblecommands.KibbleCommands
+api-version: '1.21'
+folia-supported: true
+author: MinedKibbles21
+description: Create custom aliases for Minecraft and plugin commands.
+website: https://github.com/minedkibbles21/kibblecommands
+softdepend:
+  - LuckPerms
+  - Vault
+  - Essentials
+
+commands:
+  kibblecommands:
+    description: Main command for KibbleCommands plugin management.
+    usage: /kibblecommands <subcommand>
+    aliases: [kc, kibblecmd]
+
+permissions:
+  kibblecommands.admin:
+    description: Allows full management of KibbleCommands aliases.
+    default: op
+  kibblecommands.gui:
+    description: Allows opening the KibbleCommands admin GUI.
+    default: op
+  kibblecommands.reload:
+    description: Allows reloading the KibbleCommands configuration.
+    default: op
+  kibblecommands.use:
+    description: Allows using registered custom alias commands when require-use-permission is enabled.
+    default: true
+  kibblecommands.alias.*:
+    description: Allows all custom alias permission nodes when supported by the permissions plugin.
+    default: op

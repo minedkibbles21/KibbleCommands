@@ -1,0 +1,77 @@
+# =====================================================
+#           KibbleCommands Configuration
+#                 by MinedKibbles21
+# =====================================================
+
+# Prefix shown on plugin messages.
+message-prefix: "&8[&6KibbleCommands&8]&r "
+
+# If true, players must have kibblecommands.use before running any alias.
+# LuckPerms, Vault permission bridges, and Bukkit permissions all work through
+# the normal CommandSender#hasPermission checks.
+require-use-permission: false
+
+# If true, a message is sent when an alias is used.
+notify-on-alias-use: false
+notify-message: "&7Alias &e{alias}&7 -> &e{target}"
+
+# These names are blocked so aliases do not collide with important commands.
+# Existing commands from Minecraft or other plugins are also protected.
+blocked-aliases:
+  - plugins
+  - version
+  - reload
+  - stop
+  - op
+  - deop
+
+# =====================================================
+#                  Alias Definitions
+# =====================================================
+# Format:
+# aliases:
+#   <alias-name>:
+#     command: "<the command this alias runs>"
+#     description: "Optional description"
+#     permission: "optional.permission.node"
+#     permission-message: "&cYou do not have permission."
+#     console-only: false
+#     player-only: false
+#     cooldown: 0
+#     pass-args: true
+#     execute-as: "sender"   # sender or console
+#
+# Placeholders available in command:
+#   {player}  - player name, or CONSOLE when used by console
+#   {sender}  - sender name
+#   {uuid}    - player UUID, blank for console
+#   {world}   - player world, blank for console
+#   {args}    - all extra arguments
+#   {arg:1}   - first extra argument, {arg:2} for second, etc.
+#
+# Examples:
+# aliases:
+#   gmc:
+#     command: "minecraft:gamemode creative {player}"
+#     description: "Switch yourself to Creative mode"
+#     permission: "kibblecommands.alias.gmc"
+#     player-only: true
+#     pass-args: false
+#     execute-as: "console"
+#
+#   healme:
+#     command: "essentials:heal {player}"
+#     description: "Heal yourself with EssentialsX"
+#     permission: "kibblecommands.alias.healme"
+#     player-only: true
+#     cooldown: 30
+#     pass-args: false
+#     execute-as: "console"
+#
+#   day:
+#     command: "minecraft:time set day"
+#     description: "Set the time to day"
+#     permission: "kibblecommands.alias.day"
+#     pass-args: false
+
+aliases: {}
