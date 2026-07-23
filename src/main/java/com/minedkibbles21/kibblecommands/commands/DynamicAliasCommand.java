@@ -22,55 +22,55 @@ public class DynamicAliasCommand extends Command {
         super(definition.getAlias());
         this.plugin = plugin;
         this.definition = definition;
-        this.setDescription(definition.getDescription().isBlank() ? "Alias for: " + definition.getCommand() : definition.getDescription());
+        setDescription(definition.getDescription().isBlank() ? "Alias for: " + definition.getCommand() : definition.getDescription());
         if (definition.hasPermission()) {
-            this.setPermission(definition.getPermission());
-            this.setPermissionMessage(definition.getPermissionMessage());
+            setPermission(definition.getPermission());
+            setPermissionMessage(definition.getPermissionMessage());
         }
     }
 
     @Override
     public boolean execute(CommandSender sender, String commandLabel, String[] args) {
-        if (this.definition.hasPermission() && !sender.hasPermission(this.definition.getPermission())) {
-            MessageUtil.send(sender, this.plugin.prefix() + this.definition.getPermissionMessage());
+        if (definition.hasPermission() && !sender.hasPermission(definition.getPermission())) {
+            MessageUtil.send(sender, plugin.prefix() + definition.getPermissionMessage());
             return true;
         }
-        if (this.definition.isPlayerOnly() && !(sender instanceof Player)) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cThis command can only be used by players.");
+        if (definition.isPlayerOnly() && !(sender instanceof Player)) {
+            MessageUtil.send(sender, plugin.prefix() + "&cThis command can only be used by players.");
             return true;
         }
-        if (this.definition.isConsoleOnly() && sender instanceof Player) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cThis command can only be used from the console.");
+        if (definition.isConsoleOnly() && sender instanceof Player) {
+            MessageUtil.send(sender, plugin.prefix() + "&cThis command can only be used from the console.");
             return true;
         }
-        if (this.plugin.getConfig().getBoolean("require-use-permission", false) && !sender.hasPermission("kibblecommands.use")) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cYou do not have permission to use alias commands.");
+        if (plugin.getConfig().getBoolean("require-use-permission", false) && !sender.hasPermission("kibblecommands.use")) {
+            MessageUtil.send(sender, plugin.prefix() + "&cYou do not have permission to use alias commands.");
             return true;
         }
-        if (this.definition.getCooldown() > 0 && sender instanceof Player player) {
-            long remaining = this.plugin.getCooldownManager().getRemainingCooldown(this.definition.getAlias(), player.getUniqueId(), this.definition.getCooldown());
+        if (definition.getCooldown() > 0 && sender instanceof Player player) {
+            long remaining = plugin.getCooldownManager().getRemainingCooldown(definition.getAlias(), player.getUniqueId(), definition.getCooldown());
             if (remaining > 0L) {
-                MessageUtil.send(sender, this.plugin.prefix() + "&cYou must wait &e" + remaining + "s &cbefore using this command again.");
+                MessageUtil.send(sender, plugin.prefix() + "&cYou must wait &e" + remaining + "s &cbefore using this command again.");
                 return true;
             }
-            this.plugin.getCooldownManager().recordUse(this.definition.getAlias(), player.getUniqueId());
+            plugin.getCooldownManager().recordUse(definition.getAlias(), player.getUniqueId());
         }
-        String targetCommand = this.buildTargetCommand(sender, commandLabel, args);
+        String targetCommand = buildTargetCommand(sender, commandLabel, args);
         if (targetCommand.isBlank()) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cThis alias has no command configured.");
+            MessageUtil.send(sender, plugin.prefix() + "&cThis alias has no command configured.");
             return true;
         }
-        if (this.plugin.getConfig().getBoolean("notify-on-alias-use", false)) {
-            String message = this.plugin.getConfig().getString("notify-message", "&7Alias &e{alias}&7 -> &e{target}");
-            MessageUtil.send(sender, this.plugin.prefix() + message, "{alias}", commandLabel, "{target}", targetCommand);
+        if (plugin.getConfig().getBoolean("notify-on-alias-use", false)) {
+            String message = plugin.getConfig().getString("notify-message", "&7Alias &e{alias}&7 -> &e{target}");
+            MessageUtil.send(sender, plugin.prefix() + message, "{alias}", commandLabel, "{target}", targetCommand);
         }
-        CommandSender dispatcher = this.definition.isExecuteAsConsole() ? this.plugin.getServer().getConsoleSender() : sender;
+        CommandSender dispatcher = definition.isExecuteAsConsole() ? plugin.getServer().getConsoleSender() : sender;
         try {
-            this.plugin.getServer().dispatchCommand(dispatcher, targetCommand);
+            plugin.getServer().dispatchCommand(dispatcher, targetCommand);
         } catch (Exception exception) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cFailed to execute the aliased command. Check console.");
-            this.plugin.getLogger().severe("Error dispatching alias '/" + this.definition.getAlias() + "' -> " + targetCommand);
-            this.plugin.getLogger().severe(exception.getMessage());
+            MessageUtil.send(sender, plugin.prefix() + "&cFailed to execute the aliased command. Check console.");
+            plugin.getLogger().severe("Error dispatching alias '/" + definition.getAlias() + "' -> " + targetCommand);
+            plugin.getLogger().severe(exception.getMessage());
         }
         return true;
     }
@@ -83,7 +83,7 @@ public class DynamicAliasCommand extends Command {
                 return List.of();
             }
             String[] parts = target.split("\\s+");
-            Command targetCommand = this.plugin.getServer().getCommandMap().getCommand(parts[0]);
+            Command targetCommand = plugin.getServer().getCommandMap().getCommand(parts[0]);
             if (targetCommand == null || targetCommand == this) {
                 return List.of();
             }
@@ -91,7 +91,7 @@ public class DynamicAliasCommand extends Command {
             if (parts.length > 1) {
                 targetArgs.addAll(Arrays.asList(parts).subList(1, parts.length));
             }
-            if (this.definition.isPassArgs()) {
+            if (definition.isPassArgs()) {
                 targetArgs.addAll(Arrays.asList(args));
             }
             return targetCommand.tabComplete(sender, parts[0], targetArgs.toArray(new String[0]));
@@ -101,12 +101,12 @@ public class DynamicAliasCommand extends Command {
     }
 
     private String buildTargetCommand(CommandSender sender, String commandLabel, String[] args) {
-        String configuredCommand = AliasManager.normalizeTargetCommand(this.definition.getCommand());
+        String configuredCommand = AliasManager.normalizeTargetCommand(definition.getCommand());
         String joinedArgs = String.join(" ", args);
-        String target = this.replaceBasicPlaceholders(sender, configuredCommand, commandLabel, joinedArgs);
-        target = this.replaceArgumentPlaceholders(target, args);
+        String target = replaceBasicPlaceholders(sender, configuredCommand, commandLabel, joinedArgs);
+        target = replaceArgumentPlaceholders(target, args);
         boolean commandConsumesArgs = configuredCommand.contains("{args}") || configuredCommand.contains("%args%") || ARG_PATTERN.matcher(configuredCommand).find();
-        if (this.definition.isPassArgs() && args.length > 0 && !commandConsumesArgs) {
+        if (definition.isPassArgs() && args.length > 0 && !commandConsumesArgs) {
             target = target + " " + joinedArgs;
         }
         return AliasManager.normalizeTargetCommand(target);

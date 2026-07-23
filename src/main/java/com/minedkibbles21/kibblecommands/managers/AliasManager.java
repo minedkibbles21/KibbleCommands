@@ -28,25 +28,25 @@ public class AliasManager {
     }
 
     public void reload() {
-        this.unregisterAll();
-        this.definitions.clear();
+        unregisterAll();
+        definitions.clear();
         ConfigurationSection section = this.plugin.getConfig().getConfigurationSection("aliases");
         if (section == null) {
-            this.plugin.getLogger().info("No aliases defined in config.yml.");
+            plugin.getLogger().info("No aliases defined in config.yml.");
             return;
         }
         for (String key : section.getKeys(false)) {
             ConfigurationSection aliasSection = section.getConfigurationSection(key);
             if (aliasSection == null) continue;
             String alias = key.toLowerCase(Locale.ROOT);
-            String problem = this.getAliasBlockReason(alias);
+            String problem = getAliasBlockReason(alias);
             if (problem != null) {
-                this.plugin.getLogger().warning("Alias '" + key + "' skipped: " + problem);
+                plugin.getLogger().warning("Alias '" + key + "' skipped: " + problem);
                 continue;
             }
             String command = AliasManager.normalizeTargetCommand(aliasSection.getString("command", ""));
             if (command.isBlank()) {
-                this.plugin.getLogger().warning("Alias '" + key + "' skipped: command is empty.");
+                plugin.getLogger().warning("Alias '" + key + "' skipped: command is empty.");
                 continue;
             }
             AliasDefinition definition = new AliasDefinition(
@@ -59,21 +59,21 @@ public class AliasManager {
                     aliasSection.getBoolean("player-only", false),
                     aliasSection.getInt("cooldown", 0),
                     aliasSection.getBoolean("pass-args", true),
-                    this.readExecutor(aliasSection)
+                    readExecutor(aliasSection)
             );
-            if (!this.registerDynamic(definition)) continue;
-            this.definitions.put(definition.getAlias(), definition);
+            if (!registerDynamic(definition)) continue;
+            definitions.put(definition.getAlias(), definition);
         }
-        this.plugin.getLogger().info("Loaded " + this.definitions.size() + " alias(es).");
+        plugin.getLogger().info("Loaded " + definitions.size() + " alias(es).");
     }
 
     public boolean addAlias(String alias, String command, String description, String permission, boolean playerOnly, boolean consoleOnly, int cooldown, boolean passArgs) {
-        return this.addAlias(alias, command, description, permission, playerOnly, consoleOnly, cooldown, passArgs, "sender");
+        return addAlias(alias, command, description, permission, playerOnly, consoleOnly, cooldown, passArgs, "sender");
     }
 
     public boolean addAlias(String alias, String command, String description, String permission, boolean playerOnly, boolean consoleOnly, int cooldown, boolean passArgs, String executeAs) {
         String key = alias.toLowerCase(Locale.ROOT);
-        if (this.getAliasBlockReason(key) != null) {
+        if (getAliasBlockReason(key) != null) {
             return false;
         }
         AliasDefinition definition = new AliasDefinition(
@@ -91,58 +91,58 @@ public class AliasManager {
         if (definition.getCommand().isBlank()) {
             return false;
         }
-        if (!this.registerDynamic(definition)) {
+        if (!registerDynamic(definition)) {
             return false;
         }
         String path = "aliases." + key;
-        this.plugin.getConfig().set(path + ".command", definition.getCommand());
+        plugin.getConfig().set(path + ".command", definition.getCommand());
         if (!definition.getDescription().isBlank()) {
-            this.plugin.getConfig().set(path + ".description", definition.getDescription());
+            plugin.getConfig().set(path + ".description", definition.getDescription());
         }
         if (definition.hasPermission()) {
-            this.plugin.getConfig().set(path + ".permission", definition.getPermission());
-            this.plugin.getConfig().set(path + ".permission-message", definition.getPermissionMessage());
+            plugin.getConfig().set(path + ".permission", definition.getPermission());
+            plugin.getConfig().set(path + ".permission-message", definition.getPermissionMessage());
         }
-        this.plugin.getConfig().set(path + ".player-only", definition.isPlayerOnly());
-        this.plugin.getConfig().set(path + ".console-only", definition.isConsoleOnly());
-        this.plugin.getConfig().set(path + ".cooldown", definition.getCooldown());
-        this.plugin.getConfig().set(path + ".pass-args", definition.isPassArgs());
-        this.plugin.getConfig().set(path + ".execute-as", definition.getExecuteAs());
-        this.plugin.saveConfig();
-        this.definitions.put(key, definition);
+        plugin.getConfig().set(path + ".player-only", definition.isPlayerOnly());
+        plugin.getConfig().set(path + ".console-only", definition.isConsoleOnly());
+        plugin.getConfig().set(path + ".cooldown", definition.getCooldown());
+        plugin.getConfig().set(path + ".pass-args", definition.isPassArgs());
+        plugin.getConfig().set(path + ".execute-as", definition.getExecuteAs());
+        plugin.saveConfig();
+        definitions.put(key, definition);
         return true;
     }
 
     public boolean removeAlias(String alias) {
         String key = alias.toLowerCase(Locale.ROOT);
-        if (!this.definitions.containsKey(key)) {
+        if (!definitions.containsKey(key)) {
             return false;
         }
-        this.definitions.remove(key);
-        this.unregisterDynamic(key);
-        this.plugin.getConfig().set("aliases." + key, null);
-        this.plugin.saveConfig();
+        definitions.remove(key);
+        unregisterDynamic(key);
+        plugin.getConfig().set("aliases." + key, null);
+        plugin.saveConfig();
         return true;
     }
 
     public void unregisterAll() {
         CommandMap commandMap = this.getCommandMap();
-        for (DynamicAliasCommand command : this.registeredCommands.values()) {
-            this.unregisterCommand(commandMap, command);
+        for (DynamicAliasCommand command : registeredCommands.values()) {
+            unregisterCommand(commandMap, command);
         }
-        this.registeredCommands.clear();
+        registeredCommands.clear();
     }
 
     public Map<String, AliasDefinition> getDefinitions() {
-        return Collections.unmodifiableMap(this.definitions);
+        return Collections.unmodifiableMap(definitions);
     }
 
     public AliasDefinition getDefinition(String alias) {
-        return this.definitions.get(alias.toLowerCase(Locale.ROOT));
+        return definitions.get(alias.toLowerCase(Locale.ROOT));
     }
 
     public boolean hasAlias(String alias) {
-        return this.definitions.containsKey(alias.toLowerCase(Locale.ROOT));
+        return definitions.containsKey(alias.toLowerCase(Locale.ROOT));
     }
 
     public boolean isValidAliasName(String alias) {
@@ -150,20 +150,20 @@ public class AliasManager {
     }
 
     public String getAliasBlockReason(String alias) {
-        if (!this.isValidAliasName(alias)) {
+        if (!isValidAliasName(alias)) {
             return "names may only contain lowercase letters, numbers, hyphens, and underscores";
         }
         String key = alias.toLowerCase(Locale.ROOT);
-        if (this.definitions.containsKey(key)) {
+        if (definitions.containsKey(key)) {
             return "that alias already exists";
         }
-        if (this.isReservedAlias(key)) {
+        if (isReservedAlias(key)) {
             return "that name is reserved by KibbleCommands";
         }
-        CommandMap commandMap = this.getCommandMap();
+        CommandMap commandMap = getCommandMap();
         Command existing = commandMap != null ? commandMap.getCommand(key) : null;
         if (existing != null) {
-            return "that command is already registered by " + this.describeCommandOwner(existing);
+            return "that command is already registered by " + describeCommandOwner(existing);
         }
         return null;
     }
@@ -189,26 +189,26 @@ public class AliasManager {
 
     private boolean registerDynamic(AliasDefinition definition) {
         try {
-            CommandMap commandMap = this.getCommandMap();
+            CommandMap commandMap = getCommandMap();
             if (commandMap == null) {
-                this.plugin.getLogger().severe("Could not access CommandMap; alias '" + definition.getAlias() + "' was not registered.");
+                plugin.getLogger().severe("Could not access CommandMap; alias '" + definition.getAlias() + "' was not registered.");
                 return false;
             }
-            DynamicAliasCommand command = new DynamicAliasCommand(this.plugin, definition);
-            commandMap.register(this.plugin.getName().toLowerCase(Locale.ROOT), command);
-            this.registeredCommands.put(definition.getAlias(), command);
-            this.plugin.getLogger().info("Registered alias: /" + definition.getAlias() + " -> " + definition.getCommand());
+            DynamicAliasCommand command = new DynamicAliasCommand(plugin, definition);
+            commandMap.register(plugin.getName().toLowerCase(Locale.ROOT), command);
+            registeredCommands.put(definition.getAlias(), command);
+            plugin.getLogger().info("Registered alias: /" + definition.getAlias() + " -> " + definition.getCommand());
             return true;
         } catch (Exception exception) {
-            this.plugin.getLogger().log(Level.SEVERE, "Failed to register alias '" + definition.getAlias() + "'", exception);
+            plugin.getLogger().log(Level.SEVERE, "Failed to register alias '" + definition.getAlias() + "'", exception);
             return false;
         }
     }
 
     private void unregisterDynamic(String alias) {
-        DynamicAliasCommand command = this.registeredCommands.remove(alias);
+        DynamicAliasCommand command = registeredCommands.remove(alias);
         if (command != null) {
-            this.unregisterCommand(this.getCommandMap(), command);
+            unregisterCommand(getCommandMap(), command);
         }
     }
 
@@ -217,7 +217,7 @@ public class AliasManager {
             return;
         }
         command.unregister(commandMap);
-        this.removeKnownCommandEntries(commandMap, command);
+        removeKnownCommandEntries(commandMap, command);
     }
 
     @SuppressWarnings("unchecked")
@@ -231,7 +231,7 @@ public class AliasManager {
             Map<String, Command> knownCommands = (Map<String, Command>) knownCommandsField.get(simpleCommandMap);
             knownCommands.entrySet().removeIf(entry -> entry.getValue() == command);
         } catch (ReflectiveOperationException exception) {
-            this.plugin.getLogger().log(Level.WARNING, "Could not fully clean command map entry for /" + command.getName(), exception);
+            plugin.getLogger().log(Level.WARNING, "Could not fully clean command map entry for /" + command.getName(), exception);
         }
     }
 
@@ -239,7 +239,7 @@ public class AliasManager {
         if (alias.equals("kibblecommands") || alias.equals("kc") || alias.equals("kibblecmd")) {
             return true;
         }
-        List<String> blockedAliases = this.plugin.getConfig().getStringList("blocked-aliases");
+        List<String> blockedAliases = plugin.getConfig().getStringList("blocked-aliases");
         return blockedAliases.stream().anyMatch(alias::equalsIgnoreCase);
     }
 
@@ -254,7 +254,7 @@ public class AliasManager {
         try {
             return Bukkit.getServer().getCommandMap();
         } catch (Exception exception) {
-            this.plugin.getLogger().log(Level.SEVERE, "Failed to get CommandMap", exception);
+            plugin.getLogger().log(Level.SEVERE, "Failed to get CommandMap", exception);
             return null;
         }
     }

@@ -27,27 +27,27 @@ public class KibbleCommandsCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String subcommand = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
-        if (!this.canUseSubcommand(sender, subcommand)) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cYou do not have permission to use this command.");
+        if (!canUseSubcommand(sender, subcommand)) {
+            MessageUtil.send(sender, plugin.prefix() + "&cYou do not have permission to use this command.");
             return true;
         }
         if (args.length == 0) {
-            if (sender instanceof Player player && this.canUseGui(player)) {
-                this.plugin.getAdminGuiListener().openMain(player);
+            if (sender instanceof Player player && canUseGui(player)) {
+                plugin.getAdminGuiListener().openMain(player);
             } else {
-                this.sendHelp(sender, label);
+                sendHelp(sender, label);
             }
             return true;
         }
         switch (subcommand) {
-            case "help" -> this.sendHelp(sender, label);
-            case "list" -> this.handleList(sender);
-            case "reload" -> this.handleReload(sender);
-            case "add" -> this.handleAdd(sender, args);
-            case "remove" -> this.handleRemove(sender, args);
-            case "info" -> this.handleInfo(sender, args);
-            case "gui" -> this.handleGui(sender);
-            default -> MessageUtil.send(sender, this.plugin.prefix() + "&cUnknown subcommand. Use &e/" + label + " help&c.");
+            case "help" -> sendHelp(sender, label);
+            case "list" -> handleList(sender);
+            case "reload" -> handleReload(sender);
+            case "add" -> handleAdd(sender, args);
+            case "remove" -> handleRemove(sender, args);
+            case "info" -> handleInfo(sender, args);
+            case "gui" -> handleGui(sender);
+            default -> MessageUtil.send(sender, plugin.prefix() + "&cUnknown subcommand. Use &e/" + label + " help&c.");
         }
         return true;
     }
@@ -69,79 +69,79 @@ public class KibbleCommandsCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleList(CommandSender sender) {
-        Map<String, AliasDefinition> definitions = this.plugin.getAliasManager().getDefinitions();
+        Map<String, AliasDefinition> definitions = plugin.getAliasManager().getDefinitions();
         if (definitions.isEmpty()) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&7No aliases are currently registered.");
-            MessageUtil.send(sender, this.plugin.prefix() + "&7Add one with &e/kc add <alias> <command...>&7.");
+            MessageUtil.send(sender, plugin.prefix() + "&7No aliases are currently registered.");
+            MessageUtil.send(sender, plugin.prefix() + "&7Add one with &e/kc add <alias> <command...>&7.");
             return;
         }
         MessageUtil.send(sender, "&8&m                                        ");
         MessageUtil.send(sender, "  &6Registered Aliases &8(" + definitions.size() + ")");
         MessageUtil.send(sender, "&8&m                                        ");
         for (AliasDefinition definition : definitions.values()) {
-            String flags = this.buildFlags(definition);
+            String flags = buildFlags(definition);
             MessageUtil.send(sender, "  &e/" + definition.getAlias() + " &8-> &a" + definition.getCommand() + (flags.isBlank() ? "" : " &7" + flags));
         }
         MessageUtil.send(sender, "&8&m                                        ");
     }
 
     private void handleReload(CommandSender sender) {
-        this.plugin.reloadConfig();
-        this.plugin.getCooldownManager().clearAll();
-        this.plugin.getAliasManager().reload();
-        int count = this.plugin.getAliasManager().getDefinitions().size();
-        MessageUtil.send(sender, this.plugin.prefix() + "&aConfiguration reloaded. &e" + count + " alias(es) active.");
+        plugin.reloadConfig();
+        plugin.getCooldownManager().clearAll();
+        plugin.getAliasManager().reload();
+        int count = plugin.getAliasManager().getDefinitions().size();
+        MessageUtil.send(sender, plugin.prefix() + "&aConfiguration reloaded. &e" + count + " alias(es) active.");
     }
 
     private void handleAdd(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cUsage: &e/kc add <alias> <command...>");
-            MessageUtil.send(sender, this.plugin.prefix() + "&7Example: &e/kc add gmc gamemode creative");
+            MessageUtil.send(sender, plugin.prefix() + "&cUsage: &e/kc add <alias> <command...>");
+            MessageUtil.send(sender, plugin.prefix() + "&7Example: &e/kc add gmc gamemode creative");
             return;
         }
         String alias = args[1].toLowerCase(Locale.ROOT);
         String targetCommand = AliasManager.normalizeTargetCommand(String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
         if (targetCommand.isBlank()) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cThe target command cannot be empty.");
+            MessageUtil.send(sender, plugin.prefix() + "&cThe target command cannot be empty.");
             return;
         }
-        String problem = this.plugin.getAliasManager().getAliasBlockReason(alias);
+        String problem = plugin.getAliasManager().getAliasBlockReason(alias);
         if (problem != null) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cCannot create &e/" + alias + "&c: " + problem + ".");
+            MessageUtil.send(sender, plugin.prefix() + "&cCannot create &e/" + alias + "&c: " + problem + ".");
             return;
         }
-        boolean added = this.plugin.getAliasManager().addAlias(alias, targetCommand, "", "", false, false, 0, true);
+        boolean added = plugin.getAliasManager().addAlias(alias, targetCommand, "", "", false, false, 0, true);
         if (added) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&aAlias &e/" + alias + " &a-> &e" + targetCommand + " &aregistered.");
-            MessageUtil.send(sender, this.plugin.prefix() + "&7Edit &econfig.yml &7for permissions, cooldowns, placeholders, or console execution.");
+            MessageUtil.send(sender, plugin.prefix() + "&aAlias &e/" + alias + " &a-> &e" + targetCommand + " &aregistered.");
+            MessageUtil.send(sender, plugin.prefix() + "&7Edit &econfig.yml &7for permissions, cooldowns, placeholders, or console execution.");
         } else {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cAlias &e/" + alias + " &ccould not be registered.");
+            MessageUtil.send(sender, plugin.prefix() + "&cAlias &e/" + alias + " &ccould not be registered.");
         }
     }
 
     private void handleRemove(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cUsage: &e/kc remove <alias>");
+            MessageUtil.send(sender, plugin.prefix() + "&cUsage: &e/kc remove <alias>");
             return;
         }
         String alias = args[1].toLowerCase(Locale.ROOT);
-        boolean removed = this.plugin.getAliasManager().removeAlias(alias);
+        boolean removed = plugin.getAliasManager().removeAlias(alias);
         if (removed) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&aAlias &e/" + alias + " &ahas been removed.");
+            MessageUtil.send(sender, plugin.prefix() + "&aAlias &e/" + alias + " &ahas been removed.");
         } else {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cNo alias named &e/" + alias + " &cfound.");
+            MessageUtil.send(sender, plugin.prefix() + "&cNo alias named &e/" + alias + " &cfound.");
         }
     }
 
     private void handleInfo(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cUsage: &e/kc info <alias>");
+            MessageUtil.send(sender, plugin.prefix() + "&cUsage: &e/kc info <alias>");
             return;
         }
         String alias = args[1].toLowerCase(Locale.ROOT);
-        AliasDefinition definition = this.plugin.getAliasManager().getDefinition(alias);
+        AliasDefinition definition = plugin.getAliasManager().getDefinition(alias);
         if (definition == null) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cNo alias named &e/" + alias + " &cfound.");
+            MessageUtil.send(sender, plugin.prefix() + "&cNo alias named &e/" + alias + " &cfound.");
             return;
         }
         MessageUtil.send(sender, "&8&m                                        ");
@@ -153,30 +153,30 @@ public class KibbleCommandsCommand implements CommandExecutor, TabCompleter {
         MessageUtil.send(sender, "  &7PassArgs &8> &f" + (definition.isPassArgs() ? "&ayes" : "&cno"));
         MessageUtil.send(sender, "  &7Cooldown &8> &f" + (definition.getCooldown() > 0 ? definition.getCooldown() + "s" : "&8disabled"));
         MessageUtil.send(sender, "  &7Executes &8> &f" + definition.getExecuteAs());
-        MessageUtil.send(sender, "  &7Flags    &8> &f" + this.buildFlags(definition));
+        MessageUtil.send(sender, "  &7Flags    &8> &f" + buildFlags(definition));
         MessageUtil.send(sender, "&8&m                                        ");
     }
 
     private void handleGui(CommandSender sender) {
         if (!(sender instanceof Player player)) {
-            MessageUtil.send(sender, this.plugin.prefix() + "&cThe GUI can only be opened by a player.");
+            MessageUtil.send(sender, plugin.prefix() + "&cThe GUI can only be opened by a player.");
             return;
         }
-        this.plugin.getAdminGuiListener().openMain(player);
+        plugin.getAdminGuiListener().openMain(player);
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             return SUBCOMMANDS.stream()
-                    .filter(sub -> this.canUseSubcommand(sender, sub))
+                    .filter(sub -> canUseSubcommand(sender, sub))
                     .filter(sub -> sub.startsWith(args[0].toLowerCase(Locale.ROOT)))
                     .collect(Collectors.toList());
         }
         if (args.length == 2) {
             String subcommand = args[0].toLowerCase(Locale.ROOT);
             if (subcommand.equals("remove") || subcommand.equals("info")) {
-                return this.plugin.getAliasManager().getDefinitions().keySet().stream()
+                return plugin.getAliasManager().getDefinitions().keySet().stream()
                         .filter(name -> name.startsWith(args[1].toLowerCase(Locale.ROOT)))
                         .collect(Collectors.toList());
             }
@@ -185,12 +185,12 @@ public class KibbleCommandsCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean canUseSubcommand(CommandSender sender, String subcommand) {
-        if (this.hasAdminAccess(sender)) {
+        if (hasAdminAccess(sender)) {
             return true;
         }
         return switch (subcommand) {
             case "reload" -> sender.hasPermission("kibblecommands.reload");
-            case "", "gui" -> sender instanceof Player player && this.canUseGui(player);
+            case "", "gui" -> sender instanceof Player player && canUseGui(player);
             default -> false;
         };
     }

@@ -28,55 +28,55 @@ public class AliasDefinition {
     }
 
     public String getAlias() {
-        return this.alias;
+        return alias;
     }
 
     public String getCommand() {
-        return this.command;
+        return command;
     }
 
     public String getDescription() {
-        return this.description;
+        return description;
     }
 
     public String getPermission() {
-        return this.permission;
+        return permission;
     }
 
     public String getPermissionMessage() {
-        return this.permissionMessage;
+        return permissionMessage;
     }
 
     public boolean isConsoleOnly() {
-        return this.consoleOnly;
+        return consoleOnly;
     }
 
     public boolean isPlayerOnly() {
-        return this.playerOnly;
+        return playerOnly;
     }
 
     public int getCooldown() {
-        return this.cooldown;
+        return cooldown;
     }
 
     public boolean isPassArgs() {
-        return this.passArgs;
+        return passArgs;
     }
 
     public String getExecuteAs() {
-        return this.executeAs;
+        return executeAs;
     }
 
     public boolean isExecuteAsConsole() {
-        return EXECUTOR_CONSOLE.equals(this.executeAs);
+        return EXECUTOR_CONSOLE.equals(executeAs);
     }
 
     public boolean hasPermission() {
-        return this.permission != null && !this.permission.isBlank();
+        return permission != null && !permission.isBlank();
     }
 
     public String toString() {
-        return "AliasDefinition{alias='" + this.alias + "', command='" + this.command + "'}";
+        return "AliasDefinition{alias='" + alias + "', command='" + command + "'}";
     }
 }
 
