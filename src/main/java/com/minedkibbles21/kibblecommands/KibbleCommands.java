@@ -16,107 +16,111 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
+// KibbleCommands - Custom alias manager for modern Minecraft servers.
+// Loads aliases from config and registers them dynamically on Bukkit's command map.
 public final class KibbleCommands extends JavaPlugin {
-    private static final String ALIAS_PATTERN = "[a-z0-9_-]+";
+    private static final String MATCH_REGEX = "[a-z0-9_-]+";
 
-    private final Map<String, AliasCommand> registeredCommands = new LinkedHashMap<>();
-    private final Map<String, AliasDefinition> definitions = new LinkedHashMap<>();
+    private final Map<String, AliasCmd> commandsMap = new LinkedHashMap<>();
+    private final Map<String, AliasConfig> definitions = new LinkedHashMap<>();
     
-    private CooldownTracker cooldownTracker;
-    private AdminGui adminGui;
-    private String prefix;
+    private Cooldowns cooldowns;
+    private AdminMenu adminMenu;
+    private String msgPrefix;
 
     @Override
     public void onEnable() {
+        // Save resource config if not exists
         saveDefaultConfig();
-        refreshPrefix();
+        loadPrefix();
         
-        cooldownTracker = new CooldownTracker();
-        adminGui = new AdminGui(this);
+        cooldowns = new Cooldowns();
+        adminMenu = new AdminMenu(this);
         
-        PluginCommand command = getCommand("kibblecommands");
-        if (command == null) {
-            getLogger().severe("The kibblecommands command is missing from plugin.yml.");
+        PluginCommand mainCmd = getCommand("kibblecommands");
+        if (mainCmd == null) {
+            getLogger().severe("Fail to locate kibblecommands in plugin.yml!");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         
-        AdminCommand executor = new AdminCommand(this);
-        command.setExecutor(executor);
-        command.setTabCompleter(executor);
+        AdminCmd executor = new AdminCmd(this);
+        mainCmd.setExecutor(executor);
+        mainCmd.setTabCompleter(executor);
         
-        getServer().getPluginManager().registerEvents(adminGui, this);
+        // Listeners
+        getServer().getPluginManager().registerEvents(adminMenu, this);
         reloadAliases();
-        logCompatibilityState();
+        checkCompat();
         
-        getLogger().info("KibbleCommands v" + getDescription().getVersion() + " has been enabled.");
+        getLogger().info("KibbleCommands enabled (v" + getDescription().getVersion() + ").");
     }
 
     @Override
     public void onDisable() {
         unregisterAll();
-        getLogger().info("KibbleCommands has been disabled.");
+        getLogger().info("KibbleCommands disabled.");
     }
 
     public void reloadAliases() {
         unregisterAll();
         definitions.clear();
         
-        ConfigurationSection section = getConfig().getConfigurationSection("aliases");
-        if (section == null) {
-            getLogger().info("No aliases defined in config.yml.");
+        ConfigurationSection root = getConfig().getConfigurationSection("aliases");
+        if (root == null) {
+            getLogger().info("No custom aliases found in config.yml.");
             return;
         }
         
-        for (String key : section.getKeys(false)) {
-            ConfigurationSection aliasSection = section.getConfigurationSection(key);
-            if (aliasSection == null) continue;
+        for (String key : root.getKeys(false)) {
+            ConfigurationSection sec = root.getConfigurationSection(key);
+            if (sec == null) continue;
             
-            String alias = key.toLowerCase(Locale.ROOT);
-            String problem = getAliasBlockReason(alias);
-            if (problem != null) {
-                getLogger().warning("Alias '" + key + "' skipped: " + problem);
+            String name = key.toLowerCase(Locale.ROOT);
+            String issue = getAliasBlockReason(name);
+            if (issue != null) {
+                getLogger().warning("Skipping alias '" + key + "': " + issue);
                 continue;
             }
             
-            String command = normalizeTargetCommand(aliasSection.getString("command", ""));
-            if (command.isBlank()) {
-                getLogger().warning("Alias '" + key + "' skipped: command is empty.");
+            String cmdString = cleanCmd(sec.getString("command", ""));
+            if (cmdString.isBlank()) {
+                getLogger().warning("Skipping alias '" + key + "': command field is empty.");
                 continue;
             }
             
-            AliasDefinition definition = new AliasDefinition(
-                    alias,
-                    command,
-                    aliasSection.getString("description", ""),
-                    aliasSection.getString("permission", ""),
-                    aliasSection.getString("permission-message", "&cYou do not have permission to use this command."),
-                    aliasSection.getBoolean("console-only", false),
-                    aliasSection.getBoolean("player-only", false),
-                    aliasSection.getInt("cooldown", 0),
-                    aliasSection.getBoolean("pass-args", true),
-                    readExecutor(aliasSection)
+            AliasConfig cfg = new AliasConfig(
+                    name,
+                    cmdString,
+                    sec.getString("description", ""),
+                    sec.getString("permission", ""),
+                    sec.getString("permission-message", "&cYou do not have permission to use this command."),
+                    sec.getBoolean("console-only", false),
+                    sec.getBoolean("player-only", false),
+                    sec.getInt("cooldown", 0),
+                    sec.getBoolean("pass-args", true),
+                    readExec(sec)
             );
             
-            if (registerDynamic(definition)) {
-                definitions.put(definition.getAlias(), definition);
+            if (bind(cfg)) {
+                definitions.put(cfg.getName(), cfg);
             }
         }
-        getLogger().info("Loaded " + definitions.size() + " alias(es).");
+        getLogger().info("Registered " + definitions.size() + " alias(es).");
     }
 
-    public boolean addAlias(String alias, String command, String description, String permission, boolean playerOnly, boolean consoleOnly, int cooldown, boolean passArgs) {
-        return addAlias(alias, command, description, permission, playerOnly, consoleOnly, cooldown, passArgs, "sender");
+    public boolean addAlias(String name, String target, String desc, String permission, boolean playerOnly, boolean consoleOnly, int cooldown, boolean passArgs) {
+        return addAlias(name, target, desc, permission, playerOnly, consoleOnly, cooldown, passArgs, "sender");
     }
 
-    public boolean addAlias(String alias, String command, String description, String permission, boolean playerOnly, boolean consoleOnly, int cooldown, boolean passArgs, String executeAs) {
-        String key = alias.toLowerCase(Locale.ROOT);
+    public boolean addAlias(String name, String target, String desc, String permission, boolean playerOnly, boolean consoleOnly, int cooldown, boolean passArgs, String executeAs) {
+        String key = name.toLowerCase(Locale.ROOT);
         if (getAliasBlockReason(key) != null) return false;
         
-        AliasDefinition definition = new AliasDefinition(
+        AliasConfig cfg = new AliasConfig(
                 key,
-                normalizeTargetCommand(command),
-                description,
+                cleanCmd(target),
+                desc,
                 permission,
                 "&cYou do not have permission to use this command.",
                 consoleOnly,
@@ -126,169 +130,174 @@ public final class KibbleCommands extends JavaPlugin {
                 executeAs
         );
         
-        if (definition.getCommand().isBlank() || !registerDynamic(definition)) {
+        if (cfg.getTarget().isBlank() || !bind(cfg)) {
             return false;
         }
         
+        // Write back to config file
         String path = "aliases." + key;
-        getConfig().set(path + ".command", definition.getCommand());
-        if (!definition.getDescription().isBlank()) {
-            getConfig().set(path + ".description", definition.getDescription());
+        getConfig().set(path + ".command", cfg.getTarget());
+        if (!cfg.getDesc().isBlank()) {
+            getConfig().set(path + ".description", cfg.getDesc());
         }
-        if (definition.hasPermission()) {
-            getConfig().set(path + ".permission", definition.getPermission());
-            getConfig().set(path + ".permission-message", definition.getPermissionMessage());
+        if (cfg.hasPerm()) {
+            getConfig().set(path + ".permission", cfg.getPermission());
+            getConfig().set(path + ".permission-message", cfg.getPermMessage());
         }
-        getConfig().set(path + ".player-only", definition.isPlayerOnly());
-        getConfig().set(path + ".console-only", definition.isConsoleOnly());
-        getConfig().set(path + ".cooldown", definition.getCooldown());
-        getConfig().set(path + ".pass-args", definition.isPassArgs());
-        getConfig().set(path + ".execute-as", definition.getExecuteAs());
+        getConfig().set(path + ".player-only", cfg.isPlayerOnly());
+        getConfig().set(path + ".console-only", cfg.isConsoleOnly());
+        getConfig().set(path + ".cooldown", cfg.getCooldown());
+        getConfig().set(path + ".pass-args", cfg.isPassArgs());
+        getConfig().set(path + ".execute-as", cfg.getExecuteAs());
         saveConfig();
         
-        definitions.put(key, definition);
+        definitions.put(key, cfg);
         return true;
     }
 
-    public boolean removeAlias(String alias) {
-        String key = alias.toLowerCase(Locale.ROOT);
+    public boolean removeAlias(String name) {
+        String key = name.toLowerCase(Locale.ROOT);
         if (!definitions.containsKey(key)) return false;
         
         definitions.remove(key);
-        unregisterDynamic(key);
+        unbind(key);
         getConfig().set("aliases." + key, null);
         saveConfig();
         return true;
     }
 
     public void unregisterAll() {
-        CommandMap commandMap = getCommandMap();
-        for (AliasCommand command : registeredCommands.values()) {
-            unregisterCommand(commandMap, command);
+        CommandMap map = getMap();
+        for (AliasCmd cmd : commandsMap.values()) {
+            removeCmd(map, cmd);
         }
-        registeredCommands.clear();
+        commandsMap.clear();
     }
 
-    public String getAliasBlockReason(String alias) {
-        if (!alias.matches(ALIAS_PATTERN)) {
-            return "names may only contain lowercase letters, numbers, hyphens, and underscores";
+    public String getAliasBlockReason(String name) {
+        if (!name.matches(MATCH_REGEX)) {
+            return "name must be alphanumeric/hyphens/underscores only";
         }
-        if (definitions.containsKey(alias)) {
-            return "that alias already exists";
+        if (definitions.containsKey(name)) {
+            return "alias name already registered";
         }
-        if (alias.equals("kibblecommands") || alias.equals("kc") || alias.equals("kibblecmd")) {
-            return "that name is reserved by KibbleCommands";
+        if (name.equals("kibblecommands") || name.equals("kc") || name.equals("kibblecmd")) {
+            return "name is reserved by plugin";
         }
-        List<String> blockedAliases = getConfig().getStringList("blocked-aliases");
-        if (blockedAliases.stream().anyMatch(alias::equalsIgnoreCase)) {
-            return "that name is reserved by server configuration";
+        List<String> list = getConfig().getStringList("blocked-aliases");
+        if (list.stream().anyMatch(name::equalsIgnoreCase)) {
+            return "name blocked by server config";
         }
-        CommandMap commandMap = getCommandMap();
-        Command existing = commandMap != null ? commandMap.getCommand(alias) : null;
+        
+        CommandMap map = getMap();
+        Command existing = map != null ? map.getCommand(name) : null;
         if (existing != null) {
-            return "that command is already registered by " + (existing instanceof PluginCommand pc ? pc.getPlugin().getName() : existing.getClass().getSimpleName());
+            String origin = (existing instanceof PluginCommand pc) ? pc.getPlugin().getName() : existing.getClass().getSimpleName();
+            return "command already managed by " + origin;
         }
         return null;
     }
 
-    public static String normalizeTargetCommand(String command) {
-        if (command == null) return "";
-        String normalized = command.trim();
-        while (normalized.startsWith("/")) {
-            normalized = normalized.substring(1).trim();
+    // Helper to strip leading slashes from targeted commands.
+    public static String cleanCmd(String cmd) {
+        if (cmd == null) return "";
+        String s = cmd.trim();
+        while (s.startsWith("/")) {
+            s = s.substring(1).trim();
         }
-        return normalized;
+        return s;
     }
 
-    private String readExecutor(ConfigurationSection aliasSection) {
-        String executeAs = aliasSection.getString("execute-as", "");
-        if (executeAs.isBlank() && aliasSection.getBoolean("run-as-console", false)) {
+    private String readExec(ConfigurationSection sec) {
+        String exec = sec.getString("execute-as", "");
+        if (exec.isBlank() && sec.getBoolean("run-as-console", false)) {
             return "console";
         }
-        return "console".equalsIgnoreCase(executeAs) ? "console" : "sender";
+        return "console".equalsIgnoreCase(exec) ? "console" : "sender";
     }
 
-    private boolean registerDynamic(AliasDefinition definition) {
+    private boolean bind(AliasConfig cfg) {
         try {
-            CommandMap commandMap = getCommandMap();
-            if (commandMap == null) {
-                getLogger().severe("Could not access CommandMap; alias '" + definition.getAlias() + "' was not registered.");
+            CommandMap map = getMap();
+            if (map == null) {
+                getLogger().severe("Bukkit CommandMap is not accessible.");
                 return false;
             }
-            AliasCommand command = new AliasCommand(this, definition);
-            commandMap.register(getName().toLowerCase(Locale.ROOT), command);
-            registeredCommands.put(definition.getAlias(), command);
-            getLogger().info("Registered alias: /" + definition.getAlias() + " -> " + definition.getCommand());
+            AliasCmd cmd = new AliasCmd(this, cfg);
+            map.register(getName().toLowerCase(Locale.ROOT), cmd);
+            commandsMap.put(cfg.getName(), cmd);
+            getLogger().info("Bound dynamic alias: /" + cfg.getName() + " -> " + cfg.getTarget());
             return true;
-        } catch (Exception exception) {
-            getLogger().log(Level.SEVERE, "Failed to register alias '" + definition.getAlias() + "'", exception);
+        } catch (Exception ex) {
+            getLogger().log(Level.SEVERE, "Failed to bind alias " + cfg.getName(), ex);
             return false;
         }
     }
 
-    private void unregisterDynamic(String alias) {
-        AliasCommand command = registeredCommands.remove(alias);
-        if (command != null) {
-            unregisterCommand(getCommandMap(), command);
+    private void unbind(String name) {
+        AliasCmd cmd = commandsMap.remove(name);
+        if (cmd != null) {
+            removeCmd(getMap(), cmd);
         }
     }
 
-    private void unregisterCommand(CommandMap commandMap, AliasCommand command) {
-        if (commandMap == null) return;
-        command.unregister(commandMap);
+    // Dynamic unregistration utilizing Java Reflection to update Bukkit's internal SimpleCommandMap map.
+    private void removeCmd(CommandMap map, AliasCmd cmd) {
+        if (map == null) return;
+        cmd.unregister(map);
         
-        if (commandMap instanceof SimpleCommandMap simpleCommandMap) {
+        if (map instanceof SimpleCommandMap smap) {
             try {
-                Field knownCommandsField = SimpleCommandMap.class.getDeclaredField("knownCommands");
-                knownCommandsField.setAccessible(true);
+                Field knownField = SimpleCommandMap.class.getDeclaredField("knownCommands");
+                knownField.setAccessible(true);
                 @SuppressWarnings("unchecked")
-                Map<String, Command> knownCommands = (Map<String, Command>) knownCommandsField.get(simpleCommandMap);
-                knownCommands.entrySet().removeIf(entry -> entry.getValue() == command);
-            } catch (ReflectiveOperationException exception) {
-                getLogger().log(Level.WARNING, "Could not fully clean command map entry for /" + command.getName(), exception);
+                Map<String, Command> known = (Map<String, Command>) knownField.get(smap);
+                known.entrySet().removeIf(entry -> entry.getValue() == cmd);
+            } catch (ReflectiveOperationException ex) {
+                getLogger().log(Level.WARNING, "Failed to clean commands map reference for /" + cmd.getName(), ex);
             }
         }
     }
 
-    private CommandMap getCommandMap() {
+    private CommandMap getMap() {
         try {
             return Bukkit.getServer().getCommandMap();
-        } catch (Exception exception) {
-            getLogger().log(Level.SEVERE, "Failed to get CommandMap", exception);
+        } catch (Exception ex) {
+            getLogger().log(Level.SEVERE, "Failed to fetch Bukkit CommandMap", ex);
             return null;
         }
     }
 
-    private void logCompatibilityState() {
-        logPluginState("LuckPerms");
-        logPluginState("Vault");
-        logPluginState("Essentials");
+    private void checkCompat() {
+        checkHook("LuckPerms");
+        checkHook("Vault");
+        checkHook("Essentials");
     }
 
-    private void logPluginState(String pluginName) {
-        Plugin otherPlugin = getServer().getPluginManager().getPlugin(pluginName);
-        if (otherPlugin != null && otherPlugin.isEnabled()) {
-            getLogger().info("Detected " + pluginName + "; integration active.");
+    private void checkHook(String pName) {
+        Plugin other = getServer().getPluginManager().getPlugin(pName);
+        if (other != null && other.isEnabled()) {
+            getLogger().info("Detected " + pName + "; hook established.");
         }
     }
 
-    public Map<String, AliasDefinition> getDefinitions() {
+    public Map<String, AliasConfig> getDefinitions() {
         return Collections.unmodifiableMap(definitions);
     }
 
-    public CooldownTracker getCooldownTracker() {
-        return cooldownTracker;
+    public Cooldowns getCooldowns() {
+        return cooldowns;
     }
 
-    public AdminGui getAdminGui() {
-        return adminGui;
+    public AdminMenu getAdminMenu() {
+        return adminMenu;
     }
 
     public String prefix() {
-        return prefix;
+        return msgPrefix;
     }
 
-    private void refreshPrefix() {
-        prefix = getConfig().getString("message-prefix", "&8[&6KibbleCommands&8]&r ");
+    private void loadPrefix() {
+        msgPrefix = getConfig().getString("message-prefix", "&8[&6KibbleCommands&8]&r ");
     }
 }
