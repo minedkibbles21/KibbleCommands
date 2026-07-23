@@ -1,8 +1,5 @@
-package com.minedkibbles21.kibblecommands.gui;
+package com.minedkibbles21.kibblecommands;
 
-import com.minedkibbles21.kibblecommands.KibbleCommands;
-import com.minedkibbles21.kibblecommands.models.AliasDefinition;
-import com.minedkibbles21.kibblecommands.utils.MessageUtil;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -11,8 +8,10 @@ import java.util.Map;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,23 +22,23 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-public class AdminGuiListener implements Listener {
+public class AdminGui implements Listener {
     private final KibbleCommands plugin;
 
-    public AdminGuiListener(KibbleCommands plugin) {
+    public AdminGui(KibbleCommands plugin) {
         this.plugin = plugin;
     }
 
     public void openMain(Player player) {
         if (!canUseGui(player)) {
-            MessageUtil.send(player, plugin.prefix() + "&cYou do not have permission to open this GUI.");
+            sendMsg(player, plugin.prefix() + "&cYou do not have permission to open this GUI.");
             return;
         }
         GuiHolder holder = new GuiHolder(GuiView.MAIN, null);
         Inventory inventory = Bukkit.createInventory(holder, 54, title("KibbleCommands Admin"));
         holder.setInventory(inventory);
         
-        List<AliasDefinition> aliases = new ArrayList<>(plugin.getAliasManager().getDefinitions().values());
+        List<AliasDefinition> aliases = new ArrayList<>(plugin.getDefinitions().values());
         aliases.sort(Comparator.comparing(AliasDefinition::getAlias));
         
         int slot = 0;
@@ -59,9 +58,9 @@ public class AdminGuiListener implements Listener {
     }
 
     private void openDetails(Player player, String alias) {
-        AliasDefinition definition = plugin.getAliasManager().getDefinition(alias);
+        AliasDefinition definition = plugin.getDefinitions().get(alias);
         if (definition == null) {
-            MessageUtil.send(player, plugin.prefix() + "&cThat alias no longer exists.");
+            sendMsg(player, plugin.prefix() + "&cThat alias no longer exists.");
             openMain(player);
             return;
         }
@@ -99,7 +98,7 @@ public class AdminGuiListener implements Listener {
         }
         if (!canUseGui(player)) {
             player.closeInventory();
-            MessageUtil.send(player, plugin.prefix() + "&cYou do not have permission to use this GUI.");
+            sendMsg(player, plugin.prefix() + "&cYou do not have permission to use this GUI.");
             return;
         }
         int slot = event.getRawSlot();
@@ -151,50 +150,50 @@ public class AdminGuiListener implements Listener {
 
     private void reloadAliases(Player player) {
         if (!canReload(player)) {
-            MessageUtil.send(player, plugin.prefix() + "&cYou do not have permission to reload.");
+            sendMsg(player, plugin.prefix() + "&cYou do not have permission to reload.");
             return;
         }
         plugin.reloadConfig();
-        plugin.getCooldownManager().clearAll();
-        plugin.getAliasManager().reload();
-        MessageUtil.send(player, plugin.prefix() + "&aConfiguration reloaded.");
+        plugin.getCooldownTracker().clearAll();
+        plugin.reloadAliases();
+        sendMsg(player, plugin.prefix() + "&aConfiguration reloaded.");
         openMain(player);
     }
 
     private void removeAlias(Player player, String alias) {
         if (!canManage(player)) {
-            MessageUtil.send(player, plugin.prefix() + "&cYou do not have permission to remove aliases.");
+            sendMsg(player, plugin.prefix() + "&cYou do not have permission to remove aliases.");
             openMain(player);
             return;
         }
-        boolean removed = plugin.getAliasManager().removeAlias(alias);
+        boolean removed = plugin.removeAlias(alias);
         if (removed) {
-            MessageUtil.send(player, plugin.prefix() + "&aAlias &e/" + alias + " &ahas been removed.");
+            sendMsg(player, plugin.prefix() + "&aAlias &e/" + alias + " &ahas been removed.");
         } else {
-            MessageUtil.send(player, plugin.prefix() + "&cAlias &e/" + alias + " &cwas not found.");
+            sendMsg(player, plugin.prefix() + "&cAlias &e/" + alias + " &cwas not found.");
         }
         openMain(player);
     }
 
     private void sendCommandHelp(Player player) {
         player.closeInventory();
-        MessageUtil.send(player, "&8&m                                        ");
-        MessageUtil.send(player, "  &6&lKibbleCommands &7Admin Commands");
-        MessageUtil.send(player, "&8&m                                        ");
-        MessageUtil.send(player, "  &e/kc gui &7- Open this GUI.");
-        MessageUtil.send(player, "  &e/kc list &7- List active aliases.");
-        MessageUtil.send(player, "  &e/kc info <alias> &7- Show alias details.");
-        MessageUtil.send(player, "  &e/kc add <alias> <command...> &7- Add an alias.");
-        MessageUtil.send(player, "  &e/kc remove <alias> &7- Remove an alias.");
-        MessageUtil.send(player, "  &e/kc reload &7- Reload config.yml.");
-        MessageUtil.send(player, "&8&m                                        ");
+        sendMsg(player, "&8&m                                        ");
+        sendMsg(player, "  &6&lKibbleCommands &7Admin Commands");
+        sendMsg(player, "&8&m                                        ");
+        sendMsg(player, "  &e/kc gui &7- Open this GUI.");
+        sendMsg(player, "  &e/kc list &7- List active aliases.");
+        sendMsg(player, "  &e/kc info <alias> &7- Show alias details.");
+        sendMsg(player, "  &e/kc add <alias> <command...> &7- Add an alias.");
+        sendMsg(player, "  &e/kc remove <alias> &7- Remove an alias.");
+        sendMsg(player, "  &e/kc reload &7- Reload config.yml.");
+        sendMsg(player, "&8&m                                        ");
     }
 
     private void sendAddInstructions(Player player) {
         player.closeInventory();
-        MessageUtil.send(player, plugin.prefix() + "&7Use &e/kc add <alias> <command...> &7to create a quick alias.");
-        MessageUtil.send(player, plugin.prefix() + "&7Example: &e/kc add healme essentials:heal {player}");
-        MessageUtil.send(player, plugin.prefix() + "&7Edit &econfig.yml &7afterward for permissions, cooldowns, and console execution.");
+        sendMsg(player, plugin.prefix() + "&7Use &e/kc add <alias> <command...> &7to create a quick alias.");
+        sendMsg(player, plugin.prefix() + "&7Example: &e/kc add healme essentials:heal {player}");
+        sendMsg(player, plugin.prefix() + "&7Edit &econfig.yml &7afterward for permissions, cooldowns, and console execution.");
     }
 
     private ItemStack aliasItem(AliasDefinition definition) {
@@ -256,6 +255,10 @@ public class AdminGuiListener implements Listener {
 
     private boolean canReload(Player player) {
         return canManage(player) || player.hasPermission("kibblecommands.reload");
+    }
+
+    private void sendMsg(CommandSender sender, String msg) {
+        sender.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(msg));
     }
 
     private static final class GuiHolder implements InventoryHolder {

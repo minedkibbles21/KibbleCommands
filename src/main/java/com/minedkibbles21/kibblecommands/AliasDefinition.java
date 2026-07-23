@@ -1,8 +1,9 @@
-package com.minedkibbles21.kibblecommands.models;
+package com.minedkibbles21.kibblecommands;
 
 public class AliasDefinition {
     public static final String EXECUTOR_SENDER = "sender";
     public static final String EXECUTOR_CONSOLE = "console";
+
     private final String alias;
     private final String command;
     private final String description;
@@ -27,46 +28,17 @@ public class AliasDefinition {
         this.executeAs = EXECUTOR_CONSOLE.equalsIgnoreCase(executeAs) ? EXECUTOR_CONSOLE : EXECUTOR_SENDER;
     }
 
-    public String getAlias() {
-        return alias;
-    }
-
-    public String getCommand() {
-        return command;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public String getPermission() {
-        return permission;
-    }
-
-    public String getPermissionMessage() {
-        return permissionMessage;
-    }
-
-    public boolean isConsoleOnly() {
-        return consoleOnly;
-    }
-
-    public boolean isPlayerOnly() {
-        return playerOnly;
-    }
-
-    public int getCooldown() {
-        return cooldown;
-    }
-
-    public boolean isPassArgs() {
-        return passArgs;
-    }
-
-    public String getExecuteAs() {
-        return executeAs;
-    }
-
+    public String getAlias() { return alias; }
+    public String getCommand() { return command; }
+    public String getDescription() { return description; }
+    public String getPermission() { return permission; }
+    public String getPermissionMessage() { return permissionMessage; }
+    public boolean isConsoleOnly() { return consoleOnly; }
+    public boolean isPlayerOnly() { return playerOnly; }
+    public int getCooldown() { return cooldown; }
+    public boolean isPassArgs() { return passArgs; }
+    public String getExecuteAs() { return executeAs; }
+    
     public boolean isExecuteAsConsole() {
         return EXECUTOR_CONSOLE.equals(executeAs);
     }
@@ -75,8 +47,8 @@ public class AliasDefinition {
         return permission != null && !permission.isBlank();
     }
 
+    @Override
     public String toString() {
         return "AliasDefinition{alias='" + alias + "', command='" + command + "'}";
     }
 }
-
