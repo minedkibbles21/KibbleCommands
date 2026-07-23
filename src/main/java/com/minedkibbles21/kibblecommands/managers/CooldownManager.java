@@ -5,28 +5,27 @@ import java.util.Map;
 import java.util.UUID;
 
 public class CooldownManager {
-    private final Map<String, Map<UUID, Long>> cooldowns = new HashMap<String, Map<UUID, Long>>();
+    private final Map<String, Map<UUID, Long>> cooldowns = new HashMap<>();
 
     public long getRemainingCooldown(String alias, UUID uuid, int cooldownSec) {
-        Map<UUID, Long> map = this.cooldowns.get(alias);
+        Map<UUID, Long> map = cooldowns.get(alias);
         if (map == null) {
-            return 0L;
+            return 0;
         }
         Long last = map.get(uuid);
         if (last == null) {
-            return 0L;
+            return 0;
         }
-        long elapsed = (System.currentTimeMillis() - last) / 1000L;
-        long remaining = (long)cooldownSec - elapsed;
-        return remaining > 0L ? remaining : 0L;
+        long elapsed = (System.currentTimeMillis() - last) / 1000;
+        long remaining = cooldownSec - elapsed;
+        return Math.max(0, remaining);
     }
 
     public void recordUse(String alias, UUID uuid) {
-        this.cooldowns.computeIfAbsent(alias, k -> new HashMap()).put(uuid, System.currentTimeMillis());
+        cooldowns.computeIfAbsent(alias, k -> new HashMap<>()).put(uuid, System.currentTimeMillis());
     }
 
     public void clearAll() {
-        this.cooldowns.clear();
+        cooldowns.clear();
     }
 }
-

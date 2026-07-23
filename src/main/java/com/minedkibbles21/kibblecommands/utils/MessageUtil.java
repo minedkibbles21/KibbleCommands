@@ -5,31 +5,23 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.CommandSender;
 
 public final class MessageUtil {
-    private static final LegacyComponentSerializer SERIALIZER = LegacyComponentSerializer.legacyAmpersand();
+    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
 
-    private MessageUtil() {
-    }
+    private MessageUtil() {}
 
-    public static Component colorize(String text) {
-        return SERIALIZER.deserialize(text);
+    public static Component parse(String text) {
+        return LEGACY.deserialize(text);
     }
 
     public static void send(CommandSender sender, String message) {
-        sender.sendMessage(MessageUtil.colorize(message));
+        sender.sendMessage(parse(message));
     }
 
-    public static void send(CommandSender sender, String template, String ... pairs) {
-        String result = template;
-        int i = 0;
-        while (i + 1 < pairs.length) {
-            result = result.replace(pairs[i], pairs[i + 1]);
-            i += 2;
+    public static void send(CommandSender sender, String template, String... replacements) {
+        String formatted = template;
+        for (int i = 0; i < replacements.length - 1; i += 2) {
+            formatted = formatted.replace(replacements[i], replacements[i + 1]);
         }
-        MessageUtil.send(sender, result);
-    }
-
-    public static String strip(String text) {
-        return text.replaceAll("&[0-9a-fk-orA-FK-OR]", "");
+        send(sender, formatted);
     }
 }
-

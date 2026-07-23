@@ -1,5 +1,5 @@
 name: KibbleCommands
-version: '1.1.1'
+version: '${version}'
 main: com.minedkibbles21.kibblecommands.KibbleCommands
 api-version: '1.21'
 folia-supported: true
