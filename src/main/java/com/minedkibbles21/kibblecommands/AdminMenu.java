@@ -71,8 +71,9 @@ public class AdminMenu implements Listener {
         Inventory inv = Bukkit.createInventory(holder, 27, getTitle("Alias: /" + name));
         holder.setInventory(inv);
         
-        inv.setItem(10, buildBtn(Material.COMMAND_BLOCK, "/" + cfg.getName(), NamedTextColor.GOLD, "Target: /" + cfg.getTarget(), "Executes as: " + cfg.getExecuteAs()));
-        inv.setItem(12, buildBtn(Material.TRIPWIRE_HOOK, "Permission", NamedTextColor.YELLOW, cfg.hasPerm() ? cfg.getPermission() : "No custom permission", "Global use permission can also be enabled in config.yml."));
+        String targetText = cfg.getTargets().size() > 1 ? cfg.getTargets().size() + " commands configured" : "Target: /" + cfg.getTarget();
+        inv.setItem(10, buildBtn(Material.COMMAND_BLOCK, "/" + cfg.getName(), NamedTextColor.GOLD, targetText, "Executes as: " + cfg.getExecuteAs()));
+        inv.setItem(12, buildBtn(Material.TRIPWIRE_HOOK, "Permissions & Cost", NamedTextColor.YELLOW, "Permission: " + (cfg.hasPerm() ? cfg.getPermission() : "None"), "Cost: " + (cfg.getCost() > 0 ? "$" + cfg.getCost() : "Free"), "Global use permission optional in config."));
         inv.setItem(14, buildBtn(Material.CLOCK, "Rules", NamedTextColor.AQUA, "Pass args: " + getYesNo(cfg.isPassArgs()), "Cooldown: " + (cfg.getCooldown() > 0 ? cfg.getCooldown() + "s" : "disabled"), "Player only: " + getYesNo(cfg.isPlayerOnly()), "Console only: " + getYesNo(cfg.isConsoleOnly())));
         inv.setItem(16, buildBtn(Material.REDSTONE_BLOCK, "Remove Alias", NamedTextColor.RED, "Open confirmation before deleting."));
         inv.setItem(22, buildBtn(Material.ARROW, "Back", NamedTextColor.GRAY, "Return to the alias list."));
@@ -198,8 +199,12 @@ public class AdminMenu implements Listener {
 
     private ItemStack buildTag(AliasConfig cfg) {
         List<Component> lore = new ArrayList<>();
-        lore.add(getLine("Target: /" + cfg.getTarget(), NamedTextColor.GRAY));
+        String targetText = cfg.getTargets().size() > 1 ? cfg.getTargets().size() + " commands configured" : "Target: /" + cfg.getTarget();
+        lore.add(getLine(targetText, NamedTextColor.GRAY));
         lore.add(getLine("Executes as: " + cfg.getExecuteAs(), NamedTextColor.GRAY));
+        if (cfg.getCost() > 0) {
+            lore.add(getLine("Cost: $" + cfg.getCost(), NamedTextColor.GOLD));
+        }
         if (cfg.hasPerm()) {
             lore.add(getLine("Permission: " + cfg.getPermission(), NamedTextColor.YELLOW));
         }

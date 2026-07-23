@@ -157,9 +157,17 @@ public class AdminCmd implements CommandExecutor, TabCompleter {
         send(sender, "&8&m                                        ");
         send(sender, "  &6Alias Info: &e/" + cfg.getName());
         send(sender, "&8&m                                        ");
-        send(sender, "  &7Command  &8> &a" + cfg.getTarget());
+        if (cfg.getTargets().size() > 1) {
+            send(sender, "  &7Commands &8> &7(Multiple targets)");
+            for (String target : cfg.getTargets()) {
+                send(sender, "    &8- &a/" + target);
+            }
+        } else {
+            send(sender, "  &7Command  &8> &a/" + cfg.getTarget());
+        }
         send(sender, "  &7Desc     &8> &f" + (cfg.getDesc().isBlank() ? "&8(none)" : cfg.getDesc()));
         send(sender, "  &7Perm     &8> &f" + (cfg.hasPerm() ? cfg.getPermission() : "&8(none)"));
+        send(sender, "  &7Cost     &8> &f" + (cfg.getCost() > 0 ? "&a$" + cfg.getCost() : "&8Free"));
         send(sender, "  &7PassArgs &8> &f" + (cfg.isPassArgs() ? "&ayes" : "&cno"));
         send(sender, "  &7Cooldown &8> &f" + (cfg.getCooldown() > 0 ? cfg.getCooldown() + "s" : "&8disabled"));
         send(sender, "  &7Executes &8> &f" + cfg.getExecuteAs());

@@ -1,12 +1,14 @@
 package com.minedkibbles21.kibblecommands;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Level;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
@@ -14,6 +16,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.command.SimpleCommandMap;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 // KibbleCommands - Custom alias manager for modern Minecraft servers.
@@ -26,6 +29,7 @@ public final class KibbleCommands extends JavaPlugin {
     
     private Cooldowns cooldowns;
     private AdminMenu adminMenu;
+    private Economy economy = null;
     private String msgPrefix;
 
     @Override
@@ -36,6 +40,9 @@ public final class KibbleCommands extends JavaPlugin {
         
         cooldowns = new Cooldowns();
         adminMenu = new AdminMenu(this);
+        
+        // Setup Vault Economy Integration
+        setupEconomy();
         
         PluginCommand mainCmd = getCommand("kibblecommands");
         if (mainCmd == null) {
@@ -83,15 +90,31 @@ public final class KibbleCommands extends JavaPlugin {
                 continue;
             }
             
-            String cmdString = cleanCmd(sec.getString("command", ""));
-            if (cmdString.isBlank()) {
-                getLogger().warning("Skipping alias '" + key + "': command field is empty.");
+            // Read target commands (supporting single 'command' string or 'commands' list)
+            List<String> targetList = new ArrayList<>();
+            if (sec.isList("commands")) {
+                targetList.addAll(sec.getStringList("commands"));
+            } else {
+                String cmd = sec.getString("command", "");
+                if (!cmd.isBlank()) {
+                    targetList.add(cmd);
+                }
+            }
+            
+            if (targetList.isEmpty()) {
+                getLogger().warning("Skipping alias '" + key + "': no target command configured.");
                 continue;
             }
             
+            // Read optional custom tab suggestions
+            List<String> tabList = sec.isList("tab-complete") ? sec.getStringList("tab-complete") : Collections.emptyList();
+            
+            // Read Vault cost
+            double cost = sec.getDouble("cost", 0.0);
+            
             AliasConfig cfg = new AliasConfig(
                     name,
-                    cmdString,
+                    targetList.stream().map(KibbleCommands::cleanCmd).toList(),
                     sec.getString("description", ""),
                     sec.getString("permission", ""),
                     sec.getString("permission-message", "&cYou do not have permission to use this command."),
@@ -99,7 +122,9 @@ public final class KibbleCommands extends JavaPlugin {
                     sec.getBoolean("player-only", false),
                     sec.getInt("cooldown", 0),
                     sec.getBoolean("pass-args", true),
-                    readExec(sec)
+                    readExec(sec),
+                    tabList,
+                    cost
             );
             
             if (bind(cfg)) {
@@ -119,7 +144,7 @@ public final class KibbleCommands extends JavaPlugin {
         
         AliasConfig cfg = new AliasConfig(
                 key,
-                cleanCmd(target),
+                Collections.singletonList(cleanCmd(target)),
                 desc,
                 permission,
                 "&cYou do not have permission to use this command.",
@@ -127,7 +152,9 @@ public final class KibbleCommands extends JavaPlugin {
                 playerOnly,
                 cooldown,
                 passArgs,
-                executeAs
+                executeAs,
+                Collections.emptyList(),
+                0.0
         );
         
         if (cfg.getTarget().isBlank() || !bind(cfg)) {
@@ -226,7 +253,7 @@ public final class KibbleCommands extends JavaPlugin {
             AliasCmd cmd = new AliasCmd(this, cfg);
             map.register(getName().toLowerCase(Locale.ROOT), cmd);
             commandsMap.put(cfg.getName(), cmd);
-            getLogger().info("Bound dynamic alias: /" + cfg.getName() + " -> " + cfg.getTarget());
+            getLogger().info("Bound dynamic alias: /" + cfg.getName() + " -> " + cfg.getTargets());
             return true;
         } catch (Exception ex) {
             getLogger().log(Level.SEVERE, "Failed to bind alias " + cfg.getName(), ex);
@@ -268,6 +295,16 @@ public final class KibbleCommands extends JavaPlugin {
         }
     }
 
+    private void setupEconomy() {
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            return;
+        }
+        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
+        if (rsp != null) {
+            economy = rsp.getProvider();
+        }
+    }
+
     private void checkCompat() {
         checkHook("LuckPerms");
         checkHook("Vault");
@@ -291,6 +328,14 @@ public final class KibbleCommands extends JavaPlugin {
 
     public AdminMenu getAdminMenu() {
         return adminMenu;
+    }
+
+    public boolean hasEconomy() {
+        return economy != null;
+    }
+
+    public Economy getEconomy() {
+        return economy;
     }
 
     public String prefix() {

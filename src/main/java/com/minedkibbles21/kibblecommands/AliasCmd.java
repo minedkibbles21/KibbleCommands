@@ -2,10 +2,14 @@ package com.minedkibbles21.kibblecommands;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -52,43 +56,88 @@ public class AliasCmd extends Command {
             send(sender, plugin.prefix() + "&cYou do not have permission to run alias commands.");
             return true;
         }
+
+        // 4. Vault Economy check (if cost configured & sender is player)
+        if (cfg.getCost() > 0 && sender instanceof Player p) {
+            if (!plugin.hasEconomy()) {
+                send(sender, plugin.prefix() + "&cVault economy is not active on this server.");
+                return true;
+            }
+            double bal = plugin.getEconomy().getBalance(p);
+            if (bal < cfg.getCost()) {
+                send(sender, plugin.prefix() + "&cYou need at least &e$" + cfg.getCost() + " &cto run this command (current: &e$" + bal + "&c).");
+                return true;
+            }
+        }
         
-        // 4. Cooldown tracker check
+        // 5. Cooldown tracker check
         if (cfg.getCooldown() > 0 && sender instanceof Player p) {
             long remaining = plugin.getCooldowns().getRemaining(cfg.getName(), p.getUniqueId(), cfg.getCooldown());
             if (remaining > 0) {
                 send(sender, plugin.prefix() + "&cYou must wait &e" + remaining + "s &cbefore doing that again.");
                 return true;
             }
+        }
+
+        // Charge the Vault cost now that we passed checks
+        if (cfg.getCost() > 0 && sender instanceof Player p) {
+            plugin.getEconomy().withdrawPlayer(p, cfg.getCost());
+            send(sender, plugin.prefix() + "&aCharged &e$" + cfg.getCost() + " &afor using this command.");
+        }
+
+        // Update cooldown tracking timestamp
+        if (cfg.getCooldown() > 0 && sender instanceof Player p) {
             plugin.getCooldowns().update(cfg.getName(), p.getUniqueId());
         }
         
-        // 5. Build and execute target command
-        String parsedCmd = buildTarget(sender, label, args);
-        if (parsedCmd.isBlank()) {
-            send(sender, plugin.prefix() + "&cTarget command is invalid/empty.");
-            return true;
-        }
-        
-        if (plugin.getConfig().getBoolean("notify-on-alias-use", false)) {
-            String notify = plugin.getConfig().getString("notify-message", "&7Alias &e{alias}&7 -> &e{target}");
-            String formatted = notify.replace("{alias}", label).replace("{target}", parsedCmd);
-            send(sender, plugin.prefix() + formatted);
-        }
-        
+        // 6. Build and execute target commands sequentially
         CommandSender runner = cfg.isConsoleExec() ? plugin.getServer().getConsoleSender() : sender;
-        try {
-            plugin.getServer().dispatchCommand(runner, parsedCmd);
-        } catch (Exception ex) {
-            send(sender, plugin.prefix() + "&cError dispathing command. Check logs.");
-            plugin.getLogger().severe("Fail to dispatch command: /" + cfg.getName() + " -> " + parsedCmd);
-            plugin.getLogger().severe(ex.getMessage());
+        for (String targetStr : cfg.getTargets()) {
+            String parsedCmd = buildTarget(sender, label, args, targetStr);
+            if (parsedCmd.isBlank()) continue;
+            
+            if (plugin.getConfig().getBoolean("notify-on-alias-use", false)) {
+                String notify = plugin.getConfig().getString("notify-message", "&7Alias &e{alias}&7 -> &e{target}");
+                String formatted = notify.replace("{alias}", label).replace("{target}", parsedCmd);
+                send(sender, plugin.prefix() + formatted);
+            }
+            
+            try {
+                plugin.getServer().dispatchCommand(runner, parsedCmd);
+            } catch (Exception ex) {
+                send(sender, plugin.prefix() + "&cError dispatching command. Check logs.");
+                plugin.getLogger().severe("Fail to dispatch command: /" + cfg.getName() + " -> " + parsedCmd);
+                plugin.getLogger().severe(ex.getMessage());
+            }
         }
         return true;
     }
 
     @Override
     public List<String> tabComplete(CommandSender sender, String alias, String[] args) {
+        // If custom tab-completion list is configured, parse suggestions
+        if (!cfg.getTabSuggestions().isEmpty()) {
+            String currentArg = args[args.length - 1].toLowerCase(Locale.ROOT);
+            List<String> rawSuggestions = cfg.getTabSuggestions();
+            List<String> finalSuggestions = new ArrayList<>();
+            
+            for (String suggestion : rawSuggestions) {
+                if ("<player>".equalsIgnoreCase(suggestion)) {
+                    // Populate online players
+                    for (Player player : Bukkit.getOnlinePlayers()) {
+                        finalSuggestions.add(player.getName());
+                    }
+                } else {
+                    finalSuggestions.add(suggestion);
+                }
+            }
+            
+            return finalSuggestions.stream()
+                    .filter(s -> s.toLowerCase(Locale.ROOT).startsWith(currentArg))
+                    .collect(Collectors.toList());
+        }
+
+        // Fallback: Dynamic tab completion based on primary target command
         try {
             String target = KibbleCommands.cleanCmd(cfg.getTarget());
             if (target.isBlank() || target.contains("{")) return List.of();
@@ -110,8 +159,8 @@ public class AliasCmd extends Command {
         }
     }
 
-    private String buildTarget(CommandSender sender, String label, String[] args) {
-        String base = KibbleCommands.cleanCmd(cfg.getTarget());
+    private String buildTarget(CommandSender sender, String label, String[] args, String targetCmd) {
+        String base = KibbleCommands.cleanCmd(targetCmd);
         String joined = String.join(" ", args);
         String swap = swapVars(sender, base, label, joined);
         swap = swapArgs(swap, args);
