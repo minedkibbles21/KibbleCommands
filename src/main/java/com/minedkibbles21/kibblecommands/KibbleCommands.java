@@ -1,8 +1,14 @@
 package com.minedkibbles21.kibblecommands;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.lang.reflect.Field;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -15,13 +21,18 @@ import org.bukkit.command.CommandMap;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.SimpleCommandMap;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 // KibbleCommands - Custom alias manager for modern Minecraft servers.
 // Loads aliases from config and registers them dynamically on Bukkit's command map.
-public final class KibbleCommands extends JavaPlugin {
+public final class KibbleCommands extends JavaPlugin implements Listener {
     private static final String MATCH_REGEX = "[a-z0-9_-]+";
 
     private final Map<String, AliasCmd> commandsMap = new LinkedHashMap<>();
@@ -29,8 +40,10 @@ public final class KibbleCommands extends JavaPlugin {
     
     private Cooldowns cooldowns;
     private AdminMenu adminMenu;
+    private Database database;
     private Economy economy = null;
     private String msgPrefix;
+    private File logFile;
 
     @Override
     public void onEnable() {
@@ -38,11 +51,18 @@ public final class KibbleCommands extends JavaPlugin {
         saveDefaultConfig();
         loadPrefix();
         
-        cooldowns = new Cooldowns();
+        // Setup Database Connection (SQLite/MySQL)
+        database = new Database(this);
+        database.connect();
+        
+        cooldowns = new Cooldowns(this);
         adminMenu = new AdminMenu(this);
         
         // Setup Vault Economy Integration
         setupEconomy();
+        
+        // Setup Log File
+        setupLogging();
         
         PluginCommand mainCmd = getCommand("kibblecommands");
         if (mainCmd == null) {
@@ -55,10 +75,18 @@ public final class KibbleCommands extends JavaPlugin {
         mainCmd.setExecutor(executor);
         mainCmd.setTabCompleter(executor);
         
-        // Listeners
+        // Register Event Listeners
+        getServer().getPluginManager().registerEvents(this, this);
         getServer().getPluginManager().registerEvents(adminMenu, this);
+        getServer().getPluginManager().registerEvents(new AliasCmd.WarmupListener(), this);
+        
         reloadAliases();
         checkCompat();
+        
+        // If there are players already online (e.g. reload), load their cooldowns
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            cooldowns.loadPlayer(p.getUniqueId());
+        }
         
         getLogger().info("KibbleCommands enabled (v" + getDescription().getVersion() + ").");
     }
@@ -66,6 +94,9 @@ public final class KibbleCommands extends JavaPlugin {
     @Override
     public void onDisable() {
         unregisterAll();
+        if (database != null) {
+            database.disconnect();
+        }
         getLogger().info("KibbleCommands disabled.");
     }
 
@@ -109,8 +140,9 @@ public final class KibbleCommands extends JavaPlugin {
             // Read optional custom tab suggestions
             List<String> tabList = sec.isList("tab-complete") ? sec.getStringList("tab-complete") : Collections.emptyList();
             
-            // Read Vault cost
+            // Read Vault cost and warmup
             double cost = sec.getDouble("cost", 0.0);
+            int warmup = sec.getInt("warmup", 0);
             
             AliasConfig cfg = new AliasConfig(
                     name,
@@ -124,7 +156,8 @@ public final class KibbleCommands extends JavaPlugin {
                     sec.getBoolean("pass-args", true),
                     readExec(sec),
                     tabList,
-                    cost
+                    cost,
+                    warmup
             );
             
             if (bind(cfg)) {
@@ -154,7 +187,8 @@ public final class KibbleCommands extends JavaPlugin {
                 passArgs,
                 executeAs,
                 Collections.emptyList(),
-                0.0
+                0.0,
+                0
         );
         
         if (cfg.getTarget().isBlank() || !bind(cfg)) {
@@ -225,7 +259,6 @@ public final class KibbleCommands extends JavaPlugin {
         return null;
     }
 
-    // Helper to strip leading slashes from targeted commands.
     public static String cleanCmd(String cmd) {
         if (cmd == null) return "";
         String s = cmd.trim();
@@ -268,7 +301,6 @@ public final class KibbleCommands extends JavaPlugin {
         }
     }
 
-    // Dynamic unregistration utilizing Java Reflection to update Bukkit's internal SimpleCommandMap map.
     private void removeCmd(CommandMap map, AliasCmd cmd) {
         if (map == null) return;
         cmd.unregister(map);
@@ -305,6 +337,46 @@ public final class KibbleCommands extends JavaPlugin {
         }
     }
 
+    private void setupLogging() {
+        File logsDir = new File(getDataFolder(), "logs");
+        if (!logsDir.exists()) logsDir.mkdirs();
+        
+        logFile = new File(logsDir, "use.log");
+        if (!logFile.exists()) {
+            try {
+                logFile.createNewFile();
+            } catch (IOException ex) {
+                getLogger().log(Level.SEVERE, "Could not create execution logs file!", ex);
+            }
+        }
+    }
+
+    // Appends command execution auditing records into the custom logs file.
+    public synchronized void logExecution(String sender, String alias, List<String> targets, double cost) {
+        if (logFile == null) return;
+        
+        String timeStr = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+        String costStr = cost > 0 ? "Cost: $" + cost : "Free";
+        String logLine = String.format("[%s] User %s run alias /%s -> Targets: %s (%s)", timeStr, sender, alias, targets, costStr);
+        
+        try (FileWriter fw = new FileWriter(logFile, true);
+             PrintWriter pw = new PrintWriter(fw)) {
+            pw.println(logLine);
+        } catch (IOException ex) {
+            getLogger().log(Level.WARNING, "Failed to write audit logs record", ex);
+        }
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        cooldowns.loadPlayer(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        cooldowns.unloadPlayer(event.getPlayer().getUniqueId());
+    }
+
     private void checkCompat() {
         checkHook("LuckPerms");
         checkHook("Vault");
@@ -328,6 +400,10 @@ public final class KibbleCommands extends JavaPlugin {
 
     public AdminMenu getAdminMenu() {
         return adminMenu;
+    }
+
+    public Database getDatabase() {
+        return database;
     }
 
     public boolean hasEconomy() {

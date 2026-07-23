@@ -5,6 +5,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -13,11 +16,22 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 // Represents a dynamically registered alias command.
 // Extends the standard Bukkit Command class.
 public class AliasCmd extends Command {
     private static final Pattern ARG_REGEX = Pattern.compile("\\{arg:(\\d+)}");
+    
+    // Static tracker of active countdown warmups for all aliases
+    private static final Map<UUID, WarmupRun> activeWarmups = new ConcurrentHashMap<>();
+    
     private final KibbleCommands plugin;
     private final AliasConfig cfg;
 
@@ -70,16 +84,40 @@ public class AliasCmd extends Command {
             }
         }
         
-        // 5. Cooldown tracker check
+        // 5. Cooldown tracker check (with bypass permissions check)
         if (cfg.getCooldown() > 0 && sender instanceof Player p) {
-            long remaining = plugin.getCooldowns().getRemaining(cfg.getName(), p.getUniqueId(), cfg.getCooldown());
-            if (remaining > 0) {
-                send(sender, plugin.prefix() + "&cYou must wait &e" + remaining + "s &cbefore doing that again.");
-                return true;
+            if (!p.hasPermission("kibblecommands.cooldown.bypass") && !p.hasPermission("kibblecommands.cooldown.bypass." + cfg.getName())) {
+                long remaining = plugin.getCooldowns().getRemaining(cfg.getName(), p.getUniqueId(), cfg.getCooldown());
+                if (remaining > 0) {
+                    send(sender, plugin.prefix() + "&cYou must wait &e" + remaining + "s &cbefore doing that again.");
+                    return true;
+                }
             }
         }
 
-        // Charge the Vault cost now that we passed checks
+        // 6. Warmup logic execution
+        if (cfg.getWarmup() > 0 && sender instanceof Player p) {
+            if (activeWarmups.containsKey(p.getUniqueId())) {
+                send(p, plugin.prefix() + "&cYou already have a command warmup pending!");
+                return true;
+            }
+            
+            send(p, plugin.prefix() + "&7Teleporting in &e" + cfg.getWarmup() + "s&7. Don't move or take damage.");
+            
+            // Build target runner task
+            WarmupRun run = new WarmupRun(p, label, args);
+            activeWarmups.put(p.getUniqueId(), run);
+            run.start();
+            return true;
+        }
+
+        // Otherwise execute immediately
+        runTargets(sender, label, args);
+        return true;
+    }
+
+    private void runTargets(CommandSender sender, String label, String[] args) {
+        // Charge the Vault cost
         if (cfg.getCost() > 0 && sender instanceof Player p) {
             plugin.getEconomy().withdrawPlayer(p, cfg.getCost());
             send(sender, plugin.prefix() + "&aCharged &e$" + cfg.getCost() + " &afor using this command.");
@@ -89,8 +127,10 @@ public class AliasCmd extends Command {
         if (cfg.getCooldown() > 0 && sender instanceof Player p) {
             plugin.getCooldowns().update(cfg.getName(), p.getUniqueId());
         }
+
+        // Audit log execution details
+        plugin.logExecution(sender.getName(), cfg.getName(), cfg.getTargets(), cfg.getCost());
         
-        // 6. Build and execute target commands sequentially
         CommandSender runner = cfg.isConsoleExec() ? plugin.getServer().getConsoleSender() : sender;
         for (String targetStr : cfg.getTargets()) {
             String parsedCmd = buildTarget(sender, label, args, targetStr);
@@ -110,7 +150,6 @@ public class AliasCmd extends Command {
                 plugin.getLogger().severe(ex.getMessage());
             }
         }
-        return true;
     }
 
     @Override
@@ -123,7 +162,6 @@ public class AliasCmd extends Command {
             
             for (String suggestion : rawSuggestions) {
                 if ("<player>".equalsIgnoreCase(suggestion)) {
-                    // Populate online players
                     for (Player player : Bukkit.getOnlinePlayers()) {
                         finalSuggestions.add(player.getName());
                     }
@@ -165,7 +203,6 @@ public class AliasCmd extends Command {
         String swap = swapVars(sender, base, label, joined);
         swap = swapArgs(swap, args);
         
-        // Pass trailing arguments if not manually placed via {args} or {arg:x}
         boolean hasArgToken = base.contains("{args}") || base.contains("%args%") || ARG_REGEX.matcher(base).find();
         if (cfg.isPassArgs() && args.length > 0 && !hasArgToken) {
             swap = swap + " " + joined;
@@ -204,5 +241,85 @@ public class AliasCmd extends Command {
 
     private void send(CommandSender target, String text) {
         target.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(text));
+    }
+
+    // Warmup task execution runnable holder
+    private class WarmupRun extends BukkitRunnable {
+        private final Player player;
+        private final String label;
+        private final String[] args;
+        private int secondsLeft;
+
+        private WarmupRun(Player player, String label, String[] args) {
+            this.player = player;
+            this.label = label;
+            this.args = args;
+            this.secondsLeft = cfg.getWarmup();
+        }
+
+        private void start() {
+            runTaskTimer(plugin, 20L, 20L); // Execute every second (20 ticks)
+        }
+
+        @Override
+        public void run() {
+            if (!player.isOnline()) {
+                cancel();
+                activeWarmups.remove(player.getUniqueId());
+                return;
+            }
+            
+            secondsLeft--;
+            if (secondsLeft <= 0) {
+                cancel();
+                activeWarmups.remove(player.getUniqueId());
+                send(player, plugin.prefix() + "&aWarmup complete!");
+                runTargets(player, label, args);
+            } else {
+                send(player, plugin.prefix() + "&7Teleporting in &e" + secondsLeft + "s&7...");
+            }
+        }
+        
+        private void terminate(String reason) {
+            cancel();
+            send(player, plugin.prefix() + reason);
+        }
+    }
+
+    public static void cancelWarmup(UUID uuid, String reason) {
+        WarmupRun run = activeWarmups.remove(uuid);
+        if (run != null) {
+            run.terminate(reason);
+        }
+    }
+
+    // Static event listener registered during enable to check for movement or damage
+    public static class WarmupListener implements Listener {
+        @EventHandler
+        public void onMove(PlayerMoveEvent event) {
+            Player p = event.getPlayer();
+            if (!activeWarmups.containsKey(p.getUniqueId())) return;
+            
+            // Check if block position changes
+            if (event.getFrom().getBlockX() != event.getTo().getBlockX() ||
+                event.getFrom().getBlockY() != event.getTo().getBlockY() ||
+                event.getFrom().getBlockZ() != event.getTo().getBlockZ()) {
+                cancelWarmup(p.getUniqueId(), "&cWarmup cancelled due to movement.");
+            }
+        }
+
+        @EventHandler
+        public void onDamage(EntityDamageEvent event) {
+            if (event.getEntity() instanceof Player p) {
+                if (activeWarmups.containsKey(p.getUniqueId())) {
+                    cancelWarmup(p.getUniqueId(), "&cWarmup cancelled due to taking damage.");
+                }
+            }
+        }
+
+        @EventHandler
+        public void onQuit(PlayerQuitEvent event) {
+            activeWarmups.remove(event.getPlayer().getUniqueId());
+        }
     }
 }

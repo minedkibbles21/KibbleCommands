@@ -18,8 +18,9 @@ public class AliasConfig {
     private final String executeAs;
     private final List<String> tabSuggestions;
     private final double cost;
+    private final int warmup;
 
-    public AliasConfig(String name, List<String> targets, String desc, String permission, String permMessage, boolean consoleOnly, boolean playerOnly, int cooldown, boolean passArgs, String executeAs, List<String> tabSuggestions, double cost) {
+    public AliasConfig(String name, List<String> targets, String desc, String permission, String permMessage, boolean consoleOnly, boolean playerOnly, int cooldown, boolean passArgs, String executeAs, List<String> tabSuggestions, double cost, int warmup) {
         this.name = name;
         this.targets = targets != null ? targets : Collections.emptyList();
         this.desc = desc != null ? desc : "";
@@ -32,6 +33,7 @@ public class AliasConfig {
         this.executeAs = "console".equalsIgnoreCase(executeAs) ? "console" : "sender";
         this.tabSuggestions = tabSuggestions != null ? tabSuggestions : Collections.emptyList();
         this.cost = Math.max(0.0, cost);
+        this.warmup = Math.max(0, warmup);
     }
 
     public String getName() { return name; }
@@ -52,6 +54,7 @@ public class AliasConfig {
     public String getExecuteAs() { return executeAs; }
     public List<String> getTabSuggestions() { return tabSuggestions; }
     public double getCost() { return cost; }
+    public int getWarmup() { return warmup; }
     
     public boolean isConsoleExec() {
         return "console".equals(executeAs);

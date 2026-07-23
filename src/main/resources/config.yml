@@ -7,8 +7,6 @@
 message-prefix: "&8[&6KibbleCommands&8]&r "
 
 # If true, players must have kibblecommands.use before running any alias.
-# LuckPerms, Vault permission bridges, and Bukkit permissions all work through
-# the normal CommandSender#hasPermission checks.
 require-use-permission: false
 
 # If true, a message is sent when an alias is used.
@@ -16,7 +14,6 @@ notify-on-alias-use: false
 notify-message: "&7Alias &e{alias}&7 -> &e{target}"
 
 # These names are blocked so aliases do not collide with important commands.
-# Existing commands from Minecraft or other plugins are also protected.
 blocked-aliases:
   - plugins
   - version
@@ -26,20 +23,42 @@ blocked-aliases:
   - deop
 
 # =====================================================
+#             Database Storage (SQLite / MySQL)
+# =====================================================
+# Configures persistent storage for player command cooldowns.
+database:
+  type: "sqlite" # 'sqlite' (local file) or 'mysql' (external server)
+  host: "localhost"
+  port: 3306
+  database: "minecraft"
+  username: "root"
+  password: ""
+
+# =====================================================
 #                  Alias Definitions
 # =====================================================
 # Format:
 # aliases:
 #   <alias-name>:
 #     command: "<the command this alias runs>"
+#     # OR run multiple target commands:
+#     commands:
+#       - "first target command"
+#       - "second target command"
+#
 #     description: "Optional description"
 #     permission: "optional.permission.node"
 #     permission-message: "&cYou do not have permission."
 #     console-only: false
 #     player-only: false
-#     cooldown: 0
+#     cooldown: 0            # Cooldown in seconds
 #     pass-args: true
 #     execute-as: "sender"   # sender or console
+#     cost: 0.0              # Cost in Vault economy currency (requires Vault)
+#     warmup: 0              # Delay in seconds before execution (cancelled on move/damage)
+#     tab-complete:          # Optional custom autocomplete list
+#       - "suggestion1"
+#       - "<player>"         # Expands to online player names
 #
 # Placeholders available in command:
 #   {player}  - player name, or CONSOLE when used by console
@@ -67,11 +86,14 @@ blocked-aliases:
 #     cooldown: 30
 #     pass-args: false
 #     execute-as: "console"
+#     cost: 50.0             # Costs $50.00 to run
 #
-#   day:
-#     command: "minecraft:time set day"
-#     description: "Set the time to day"
-#     permission: "kibblecommands.alias.day"
-#     pass-args: false
+#   spawn:
+#     command: "teleport {player} 0 64 0"
+#     description: "Teleport to spawn"
+#     player-only: true
+#     warmup: 5              # 5 second teleport delay
+#     tab-complete:
+#       - "now"
 
 aliases: {}
