@@ -13,9 +13,8 @@
 *.tar.gz
 *.rar
 
-# Gradle
-.gradle/
-build/
+# Maven
+target/
 
 # Decompiler & Temp artifacts
 cfr.jar
