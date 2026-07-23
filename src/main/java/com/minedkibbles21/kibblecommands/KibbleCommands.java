@@ -4,85 +4,82 @@ import com.minedkibbles21.kibblecommands.commands.KibbleCommandsCommand;
 import com.minedkibbles21.kibblecommands.gui.AdminGuiListener;
 import com.minedkibbles21.kibblecommands.managers.AliasManager;
 import com.minedkibbles21.kibblecommands.managers.CooldownManager;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
-import org.bukkit.command.TabCompleter;
-import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class KibbleCommands
-extends JavaPlugin {
+public final class KibbleCommands extends JavaPlugin {
     private AliasManager aliasManager;
     private CooldownManager cooldownManager;
     private AdminGuiListener adminGuiListener;
     private String prefix;
 
+    @Override
     public void onEnable() {
-        this.saveDefaultConfig();
-        this.refreshPrefix();
-        this.cooldownManager = new CooldownManager();
-        this.aliasManager = new AliasManager(this);
-        this.adminGuiListener = new AdminGuiListener(this);
-        PluginCommand command = this.getCommand("kibblecommands");
+        saveDefaultConfig();
+        refreshPrefix();
+        cooldownManager = new CooldownManager();
+        aliasManager = new AliasManager(this);
+        adminGuiListener = new AdminGuiListener(this);
+        PluginCommand command = getCommand("kibblecommands");
         if (command == null) {
-            this.getLogger().severe("The kibblecommands command is missing from plugin.yml.");
-            this.getServer().getPluginManager().disablePlugin((Plugin)this);
+            getLogger().severe("The kibblecommands command is missing from plugin.yml.");
+            getServer().getPluginManager().disablePlugin(this);
             return;
         }
         KibbleCommandsCommand executor = new KibbleCommandsCommand(this);
-        command.setExecutor((CommandExecutor)executor);
-        command.setTabCompleter((TabCompleter)executor);
-        this.getServer().getPluginManager().registerEvents((Listener)this.adminGuiListener, (Plugin)this);
-        this.aliasManager.reload();
-        this.logCompatibilityState();
-        this.getLogger().info("KibbleCommands v" + this.getDescription().getVersion() + " by MinedKibbles21 has been enabled.");
-        this.getLogger().info("Use /kc help or /kc gui for management.");
+        command.setExecutor(executor);
+        command.setTabCompleter(executor);
+        getServer().getPluginManager().registerEvents(adminGuiListener, this);
+        aliasManager.reload();
+        logCompatibilityState();
+        getLogger().info("KibbleCommands v" + getDescription().getVersion() + " has been enabled.");
     }
 
+    @Override
     public void onDisable() {
-        if (this.aliasManager != null) {
-            this.aliasManager.unregisterAll();
+        if (aliasManager != null) {
+            aliasManager.unregisterAll();
         }
-        this.getLogger().info("KibbleCommands has been disabled.");
+        getLogger().info("KibbleCommands has been disabled.");
     }
 
+    @Override
     public void reloadConfig() {
         super.reloadConfig();
-        this.refreshPrefix();
+        refreshPrefix();
     }
 
     private void refreshPrefix() {
-        this.prefix = this.getConfig().getString("message-prefix", "&8[&6KibbleCommands&8]&r ");
+        prefix = getConfig().getString("message-prefix", "&8[&6KibbleCommands&8]&r ");
     }
 
     private void logCompatibilityState() {
-        this.logPluginState("LuckPerms");
-        this.logPluginState("Vault");
-        this.logPluginState("Essentials");
+        logPluginState("LuckPerms");
+        logPluginState("Vault");
+        logPluginState("Essentials");
     }
 
     private void logPluginState(String pluginName) {
-        Plugin otherPlugin = this.getServer().getPluginManager().getPlugin(pluginName);
+        Plugin otherPlugin = getServer().getPluginManager().getPlugin(pluginName);
         if (otherPlugin != null && otherPlugin.isEnabled()) {
-            this.getLogger().info("Detected " + pluginName + "; Bukkit permissions and command dispatch will use it normally.");
+            getLogger().info("Detected " + pluginName + "; integration active.");
         }
     }
 
     public AliasManager getAliasManager() {
-        return this.aliasManager;
+        return aliasManager;
     }
 
     public CooldownManager getCooldownManager() {
-        return this.cooldownManager;
+        return cooldownManager;
     }
 
     public AdminGuiListener getAdminGuiListener() {
-        return this.adminGuiListener;
+        return adminGuiListener;
     }
 
     public String prefix() {
-        return this.prefix;
+        return prefix;
     }
 }
-
