@@ -132,17 +132,19 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
                 }
             }
             
-            if (targetList.isEmpty()) {
-                getLogger().warning("Skipping alias '" + key + "': no target command configured.");
-                continue;
-            }
-            
-            // Read optional custom tab suggestions
+            // Optional custom tab suggestions
             List<String> tabList = sec.isList("tab-complete") ? sec.getStringList("tab-complete") : Collections.emptyList();
             
-            // Read Vault cost and warmup
+            // Read Vault cost, warmup, and custom message action feedback
             double cost = sec.getDouble("cost", 0.0);
             int warmup = sec.getInt("warmup", 0);
+            String actionMessage = sec.getString("send-message", "");
+            
+            // Ignore alias if targets list is empty AND send-message is also empty
+            if (targetList.isEmpty() && actionMessage.isBlank()) {
+                getLogger().warning("Skipping alias '" + key + "': has no target command nor send-message action configured.");
+                continue;
+            }
             
             AliasConfig cfg = new AliasConfig(
                     name,
@@ -157,13 +159,17 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
                     readExec(sec),
                     tabList,
                     cost,
-                    warmup
+                    warmup,
+                    actionMessage
             );
             
             if (bind(cfg)) {
                 definitions.put(cfg.getName(), cfg);
             }
         }
+        
+        // Sync registered autocomplete lists to all online client players
+        syncCommands();
         getLogger().info("Registered " + definitions.size() + " alias(es).");
     }
 
@@ -188,7 +194,8 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
                 executeAs,
                 Collections.emptyList(),
                 0.0,
-                0
+                0,
+                ""
         );
         
         if (cfg.getTarget().isBlank() || !bind(cfg)) {
@@ -213,6 +220,7 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
         saveConfig();
         
         definitions.put(key, cfg);
+        syncCommands();
         return true;
     }
 
@@ -224,6 +232,7 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
         unbind(key);
         getConfig().set("aliases." + key, null);
         saveConfig();
+        syncCommands();
         return true;
     }
 
@@ -257,6 +266,13 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
             return "command already managed by " + origin;
         }
         return null;
+    }
+
+    // Sends command registration updates to all online clients dynamically.
+    public void syncCommands() {
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            p.updateCommands();
+        }
     }
 
     public static String cleanCmd(String cmd) {
@@ -351,7 +367,6 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
         }
     }
 
-    // Appends command execution auditing records into the custom logs file.
     public synchronized void logExecution(String sender, String alias, List<String> targets, double cost) {
         if (logFile == null) return;
         
@@ -370,6 +385,8 @@ public final class KibbleCommands extends JavaPlugin implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         cooldowns.loadPlayer(event.getPlayer().getUniqueId());
+        // Trigger command sync when player logs in
+        syncCommands();
     }
 
     @EventHandler

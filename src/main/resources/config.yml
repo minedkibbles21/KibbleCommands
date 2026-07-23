@@ -13,6 +13,9 @@ require-use-permission: false
 notify-on-alias-use: false
 notify-message: "&7Alias &e{alias}&7 -> &e{target}"
 
+# If true, custom feedback messages (send-message field) are auto-sent to players.
+send-action-messages: true
+
 # These names are blocked so aliases do not collide with important commands.
 blocked-aliases:
   - plugins
@@ -56,11 +59,12 @@ database:
 #     execute-as: "sender"   # sender or console
 #     cost: 0.0              # Cost in Vault economy currency (requires Vault)
 #     warmup: 0              # Delay in seconds before execution (cancelled on move/damage)
+#     send-message: "msg"    # Optional custom chat feedback message sent on run
 #     tab-complete:          # Optional custom autocomplete list
 #       - "suggestion1"
 #       - "<player>"         # Expands to online player names
 #
-# Placeholders available in command:
+# Placeholders available in command & send-message:
 #   {player}  - player name, or CONSOLE when used by console
 #   {sender}  - sender name
 #   {uuid}    - player UUID, blank for console
@@ -95,5 +99,9 @@ database:
 #     warmup: 5              # 5 second teleport delay
 #     tab-complete:
 #       - "now"
+#
+#   rules:
+#     description: "Show server rules list"
+#     send-message: "&e1. Respect other players.\n&e2. No spamming or advertising.\n&e3. No hacked clients."
 
 aliases: {}

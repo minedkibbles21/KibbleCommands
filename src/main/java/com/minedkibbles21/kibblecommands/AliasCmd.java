@@ -131,6 +131,14 @@ public class AliasCmd extends Command {
         // Audit log execution details
         plugin.logExecution(sender.getName(), cfg.getName(), cfg.getTargets(), cfg.getCost());
         
+        // Send custom feedback action message if enabled globally and present in configuration
+        if (plugin.getConfig().getBoolean("send-action-messages", true) && !cfg.getActionMessage().isEmpty()) {
+            String joined = String.join(" ", args);
+            String parsed = swapVars(sender, cfg.getActionMessage(), label, joined);
+            parsed = swapArgs(parsed, args);
+            send(sender, parsed);
+        }
+
         CommandSender runner = cfg.isConsoleExec() ? plugin.getServer().getConsoleSender() : sender;
         for (String targetStr : cfg.getTargets()) {
             String parsedCmd = buildTarget(sender, label, args, targetStr);
@@ -154,7 +162,6 @@ public class AliasCmd extends Command {
 
     @Override
     public List<String> tabComplete(CommandSender sender, String alias, String[] args) {
-        // If custom tab-completion list is configured, parse suggestions
         if (!cfg.getTabSuggestions().isEmpty()) {
             String currentArg = args[args.length - 1].toLowerCase(Locale.ROOT);
             List<String> rawSuggestions = cfg.getTabSuggestions();
@@ -175,7 +182,6 @@ public class AliasCmd extends Command {
                     .collect(Collectors.toList());
         }
 
-        // Fallback: Dynamic tab completion based on primary target command
         try {
             String target = KibbleCommands.cleanCmd(cfg.getTarget());
             if (target.isBlank() || target.contains("{")) return List.of();
